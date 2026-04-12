@@ -4,11 +4,11 @@
   "private": true,
   "description": "NexSQL - AI-Powered Database Client",
   "scripts": {
-    "dev": "pnpm --filter desktop dev",
-    "build": "pnpm --filter desktop build",
-    "build:win": "pnpm --filter desktop build:win",
-    "build:mac": "pnpm --filter desktop build:mac",
-    "build:linux": "pnpm --filter desktop build:linux",
+    "dev": "pnpm --filter nexsql-desktop dev",
+    "build": "pnpm --filter nexsql-desktop build",
+    "build:win": "pnpm --filter nexsql-desktop build:win",
+    "build:mac": "pnpm --filter nexsql-desktop build:mac",
+    "build:linux": "pnpm --filter nexsql-desktop build:linux",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck"
   },
