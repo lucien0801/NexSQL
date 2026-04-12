@@ -1,0 +1,60 @@
+{
+  "name": "desktop",
+  "version": "0.1.0",
+  "description": "NexSQL - AI-Powered Database Client",
+  "author": "NexSQL Allen.Zhang",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "build:win": "electron-vite build && electron-builder --win",
+    "build:win:installer": "electron-vite build && electron-builder --win nsis",
+    "build:mac": "electron-vite build && electron-builder --mac",
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "preview": "electron-vite preview",
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AllenZhanga/NexSQL.git"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^3.0.0",
+    "@monaco-editor/react": "^4.6.0",
+    "@tanstack/react-table": "^8.19.0",
+    "@tanstack/react-virtual": "^3.10.0",
+    "better-sqlite3": "^11.5.0",
+    "clsx": "^2.1.0",
+    "knex": "^3.0.0",
+    "lucide-react": "^0.460.0",
+    "monaco-editor": "^0.52.0",
+    "mssql": "^11.0.1",
+    "mysql2": "^3.11.0",
+    "openai": "^4.77.0",
+    "pg": "^8.13.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-resizable-panels": "^2.1.0",
+    "tailwind-merge": "^2.5.0",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.0",
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/mssql": "^9.0.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^26.0.0",
+    "electron-vite": "^2.3.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,320 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --app-font-size: 14px;
+  --app-bg: #10171d;
+  --app-sidebar: #182129;
+  --app-panel: #121b23;
+  --app-header: #223040;
+  --app-border: #2f3c49;
+  --app-hover: #20303e;
+  --app-active: #0d3a57;
+  --app-input: #1d2a35;
+  --text-primary: #d8e2ea;
+  --text-secondary: #a4b4c0;
+  --text-muted: #738393;
+  --text-link: #34c9d7;
+
+  --accent-primary: #34c9d7;
+  --accent-primary-rgb: 52, 201, 215;
+  --accent-success: #22c55e;
+  --accent-warning: #f59e0b;
+  --accent-danger: #ef4444;
+
+  --bg-tint-1: rgba(52, 201, 215, 0.12);
+  --bg-tint-2: rgba(245, 158, 11, 0.08);
+  --bg-glow: rgba(52, 201, 215, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body {
+  background-color: var(--app-bg);
+  background-image:
+    radial-gradient(1200px 600px at 8% -10%, var(--bg-tint-1), transparent 60%),
+    radial-gradient(1000px 500px at 100% 0%, var(--bg-tint-2), transparent 62%);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: var(--app-font-size);
+  line-height: 1.4;
+}
+
+html.theme-dark {
+  color-scheme: dark;
+}
+
+html.theme-light {
+  color-scheme: light;
+  --app-bg: #f7f8fa;
+  --app-sidebar: #ffffff;
+  --app-panel: #f3f4f6;
+  --app-header: #f1f3f5;
+  --app-border: #d8dde3;
+  --app-hover: #eceff3;
+  --app-active: #e7edf4;
+  --app-input: #ffffff;
+  --text-primary: #1f2730;
+  --text-secondary: #4f5d6b;
+  --text-muted: #6a7886;
+  --text-link: #246b96;
+
+  --accent-primary: #3d7ea6;
+  --accent-primary-rgb: 61, 126, 166;
+  --accent-success: #1f9d55;
+  --accent-warning: #d38a0a;
+  --accent-danger: #dc3d3d;
+
+  --bg-tint-1: rgba(61, 126, 166, 0.05);
+  --bg-tint-2: rgba(100, 116, 139, 0.04);
+  --bg-glow: rgba(61, 126, 166, 0.1);
+}
+
+/* Optional blue-tinted light theme variant */
+html.theme-light-blue {
+  color-scheme: light;
+  --app-bg: #f4f8fb;
+  --app-sidebar: #ffffff;
+  --app-panel: #f0f5f9;
+  --app-header: #eef4fa;
+  --app-border: #d2dee9;
+  --app-hover: #e8f0f8;
+  --app-active: #d8ecff;
+  --app-input: #ffffff;
+  --text-primary: #16212b;
+  --text-secondary: #405364;
+  --text-muted: #5e7285;
+  --text-link: #0b75b8;
+
+  --accent-primary: #0b75b8;
+  --accent-primary-rgb: 11, 117, 184;
+  --accent-success: #1f9d55;
+  --accent-warning: #d38a0a;
+  --accent-danger: #dc3d3d;
+
+  --bg-tint-1: rgba(11, 117, 184, 0.1);
+  --bg-tint-2: rgba(16, 185, 129, 0.08);
+  --bg-glow: rgba(11, 117, 184, 0.14);
+}
+
+html.theme-light .shadow-xl,
+html.theme-light .shadow-2xl,
+html.theme-light-blue .shadow-xl,
+html.theme-light-blue .shadow-2xl {
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Theme-backed utility overrides */
+.bg-app-bg {
+  background-color: var(--app-bg) !important;
+  background-image:
+    radial-gradient(1200px 520px at 0% 0%, var(--bg-tint-1), transparent 68%),
+    radial-gradient(900px 420px at 100% 0%, var(--bg-tint-2), transparent 72%);
+}
+
+.bg-app-sidebar,
+.bg-\[\#252526\] {
+  background-color: var(--app-sidebar) !important;
+}
+
+.bg-app-panel,
+.bg-\[\#1e1e1e\],
+.bg-\[\#1a1a1a\] {
+  background-color: var(--app-panel) !important;
+}
+
+.bg-accent-blue,
+.hover\:bg-accent-blue:hover {
+  background-color: var(--accent-primary) !important;
+}
+
+.text-accent-blue,
+.hover\:text-accent-blue:hover {
+  color: var(--accent-primary) !important;
+}
+
+.border-accent-blue,
+.hover\:border-accent-blue:hover {
+  border-color: var(--accent-primary) !important;
+}
+
+.border-accent-blue\/40 {
+  border-color: rgba(var(--accent-primary-rgb), 0.4) !important;
+}
+
+.ring-accent-blue\/50 {
+  --tw-ring-color: rgba(var(--accent-primary-rgb), 0.5) !important;
+}
+
+.bg-app-header {
+  background-color: var(--app-header) !important;
+}
+
+.bg-app-input {
+  background-color: var(--app-input) !important;
+}
+
+.border-app-border {
+  border-color: var(--app-border) !important;
+}
+
+.text-text-primary {
+  color: var(--text-primary) !important;
+}
+
+.text-text-secondary {
+  color: var(--text-secondary) !important;
+}
+
+.text-text-muted {
+  color: var(--text-muted) !important;
+}
+
+.text-text-link {
+  color: var(--text-link) !important;
+}
+
+.bg-app-active,
+.hover\:bg-app-active:hover {
+  background-color: var(--app-active) !important;
+}
+
+html.theme-light .bg-app-active,
+html.theme-light .hover\:bg-app-active:hover,
+html.theme-light-blue .bg-app-active,
+html.theme-light-blue .hover\:bg-app-active:hover {
+  color: #1d4ed8 !important;
+}
+
+.hover\:bg-app-hover:hover {
+  background-color: var(--app-hover) !important;
+}
+
+html.theme-light .bg-black\/70,
+html.theme-light-blue .bg-black\/70 {
+  background-color: rgba(15, 23, 42, 0.24) !important;
+}
+
+html.theme-light .bg-red-900\/10,
+html.theme-light-blue .bg-red-900\/10 {
+  background-color: rgba(220, 38, 38, 0.08) !important;
+}
+
+html.theme-light .bg-accent-blue\/5,
+html.theme-light-blue .bg-accent-blue\/5 {
+  background-color: rgba(var(--accent-primary-rgb), 0.06) !important;
+}
+
+html.theme-light .bg-accent-blue\/10,
+html.theme-light .bg-accent-blue\/20,
+html.theme-light-blue .bg-accent-blue\/10,
+html.theme-light-blue .bg-accent-blue\/20 {
+  background-color: rgba(var(--accent-primary-rgb), 0.12) !important;
+}
+
+.bg-accent-blue\/5 {
+  background-color: rgba(var(--accent-primary-rgb), 0.06) !important;
+}
+
+.bg-accent-blue\/10,
+.bg-accent-blue\/20 {
+  background-color: rgba(var(--accent-primary-rgb), 0.14) !important;
+}
+
+.text-emerald-500 {
+  color: var(--accent-success) !important;
+}
+
+.border-emerald-500\/40 {
+  border-color: color-mix(in srgb, var(--accent-success) 40%, transparent) !important;
+}
+
+.bg-emerald-500\/10 {
+  background-color: color-mix(in srgb, var(--accent-success) 10%, transparent) !important;
+}
+
+/* Scale common text utilities with the selected app font size */
+.text-2xs {
+  font-size: calc(var(--app-font-size) - 4px) !important;
+}
+
+.text-xs {
+  font-size: calc(var(--app-font-size) - 2px) !important;
+}
+
+.text-sm {
+  font-size: var(--app-font-size) !important;
+}
+
+.text-base {
+  font-size: calc(var(--app-font-size) + 1px) !important;
+}
+
+.text-lg {
+  font-size: calc(var(--app-font-size) + 4px) !important;
+}
+
+/* Allow text selection in editors and results */
+.selectable,
+.selectable * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-muted) 70%, var(--app-border));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-secondary) 70%, var(--app-border));
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Window drag region (for frameless window on Mac) */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Panel resize handles */
+[data-panel-resize-handle-id] {
+  background: var(--app-border);
+  transition: background 0.1s;
+}
+[data-panel-resize-handle-id]:hover,
+[data-panel-resize-handle-id][data-resize-handle-active] {
+  background: var(--accent-primary);
+}
+
+/* Code / monospace text */
+.code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, Monaco, monospace;
+  font-size: calc(var(--app-font-size) - 2px);
+}

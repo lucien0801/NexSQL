@@ -1,0 +1,64 @@
+appId: com.nexsql.app
+productName: NexSQL
+copyright: Copyright © 2024 NexSQL Contributors
+icon: build/icon
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - out/**
+  - "!**/.eslintrc.{js,cjs}"
+  - "!**/{.env,.env.*}"
+  - "!**/{.gitignore,README.md,CHANGELOG.md}"
+  - "!**/{test,tests,__tests__}/**"
+
+win:
+  executableName: nexsql
+  icon: build/icon.ico
+  artifactName: ${productName}-Setup-${version}-${arch}.${ext}
+  signAndEditExecutable: false
+  verifyUpdateCodeSignature: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSCameraUsageDescription: Application requests access to the device's camera.
+    NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: NexSQL
+  perMachine: false
+  runAfterFinish: true
+
+dmg:
+  title: NexSQL
+
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  category: Utility
+  maintainer: nexsql@nexsql.dev
+
+publish:
+  provider: github
+  releaseType: release

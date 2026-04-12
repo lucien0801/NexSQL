@@ -1,0 +1,94 @@
+import { contextBridge, ipcRenderer } from 'electron'
+import type { ConnectionConfig, ConnectionFormData, ConnectionTestResult } from '@shared/types/connection'
+import type {
+  QueryResult,
+  DatabaseSchema,
+  QueryHistoryEntry,
+  SchemaColumn
+} from '@shared/types/query'
+import type { AIConfig, NLToSQLRequest } from '@shared/types/ai'
+
+const dbAPI = {
+  listConnections: (): Promise<ConnectionConfig[]> =>
+    ipcRenderer.invoke('db:listConnections'),
+
+  addConnection: (formData: ConnectionFormData): Promise<ConnectionConfig> =>
+    ipcRenderer.invoke('db:addConnection', formData),
+
+  updateConnection: (id: string, formData: Partial<ConnectionFormData>): Promise<ConnectionConfig> =>
+    ipcRenderer.invoke('db:updateConnection', id, formData),
+
+  deleteConnection: (id: string): Promise<void> =>
+    ipcRenderer.invoke('db:deleteConnection', id),
+
+  testConnection: (formData: ConnectionFormData, existingId?: string): Promise<ConnectionTestResult> =>
+    ipcRenderer.invoke('db:testConnection', formData, existingId),
+
+  connect: (id: string): Promise<void> =>
+    ipcRenderer.invoke('db:connect', id),
+
+  disconnect: (id: string): Promise<void> =>
+    ipcRenderer.invoke('db:disconnect', id),
+
+  executeQuery: (connectionId: string, sql: string, database?: string): Promise<QueryResult> =>
+    ipcRenderer.invoke('db:executeQuery', connectionId, sql, database),
+
+  getDatabases: (connectionId: string): Promise<string[]> =>
+    ipcRenderer.invoke('db:getDatabases', connectionId),
+
+  getSchema: (connectionId: string, database?: string): Promise<DatabaseSchema> =>
+    ipcRenderer.invoke('db:getSchema', connectionId, database),
+
+  getTableColumns: (connectionId: string, table: string, database?: string): Promise<SchemaColumn[]> =>
+    ipcRenderer.invoke('db:getTableColumns', connectionId, table, database),
+
+  getTableIndexes: (connectionId: string, table: string, database?: string): Promise<Array<{ name: string; columns: string[]; unique: boolean; primary: boolean }>> =>
+    ipcRenderer.invoke('db:getTableIndexes', connectionId, table, database),
+
+  getTableDDL: (connectionId: string, table: string, database?: string): Promise<string> =>
+    ipcRenderer.invoke('db:getTableDDL', connectionId, table, database),
+
+  exportTableSQL: (connectionId: string, table: string, database?: string): Promise<string> =>
+    ipcRenderer.invoke('db:exportTableSQL', connectionId, table, database),
+
+  getHistory: (connectionId?: string, limit?: number): Promise<QueryHistoryEntry[]> =>
+    ipcRenderer.invoke('db:getHistory', connectionId, limit),
+
+  duplicateConnection: (id: string): Promise<ConnectionConfig> =>
+    ipcRenderer.invoke('db:duplicateConnection', id),
+
+  exportConnections: (): Promise<string> =>
+    ipcRenderer.invoke('db:exportConnections'),
+
+  importConnections: (jsonStr: string): Promise<number> =>
+    ipcRenderer.invoke('db:importConnections', jsonStr)
+}
+
+const aiAPI = {
+  getConfig: (): Promise<AIConfig> =>
+    ipcRenderer.invoke('ai:getConfig'),
+
+  updateConfig: (config: Partial<AIConfig>): Promise<void> =>
+    ipcRenderer.invoke('ai:updateConfig', config),
+
+  generateSQL: (request: NLToSQLRequest): Promise<string> =>
+    ipcRenderer.invoke('ai:generateSQL', request),
+
+  onSQLToken: (callback: (token: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, token: string): void => callback(token)
+    ipcRenderer.on('ai:sqlToken', listener)
+    return () => ipcRenderer.off('ai:sqlToken', listener)
+  },
+
+  onSQLDone: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('ai:sqlDone', listener)
+    return () => ipcRenderer.off('ai:sqlDone', listener)
+  }
+}
+
+contextBridge.exposeInMainWorld('db', dbAPI)
+contextBridge.exposeInMainWorld('ai', aiAPI)
+
+export type DbAPI = typeof dbAPI
+export type AiAPI = typeof aiAPI
