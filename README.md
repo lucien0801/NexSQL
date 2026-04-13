@@ -153,7 +153,7 @@ NexSQL 是一个基于 Electron + React 的跨平台桌面数据库客户端。
 - pnpm >= 6
 
 ```bash
-git clone https://github.com/<your-org>/NexSQL.git
+git clone https://github.com/AllenZhanga/NexSQL.git
 cd NexSQL
 
 pnpm install

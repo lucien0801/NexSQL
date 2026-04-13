@@ -2,6 +2,7 @@ appId: com.nexsql.app
 productName: NexSQL
 copyright: Copyright © 2024 NexSQL Contributors
 icon: build/icon
+afterSign: build/scripts/after-sign.cjs
 
 directories:
   buildResources: build

@@ -76,6 +76,53 @@ function safeRemoveDir(dir, retries = 3) {
 
 const outputDir = resolveOutputDir();
 
+// ── Pre-cache: dmg-builder arm64 binary (macOS only) ────────────────────────
+// electron-builder downloads dmg-builder via @electron/get, which rewrites ALL
+// GitHub URLs using ELECTRON_MIRROR – making npmmirror's electron path return 404.
+// We pre-populate the cache ourselves from the correct npmmirror path so
+// electron-builder finds it and skips the download entirely.
+if (platform === '--mac' && process.platform === 'darwin') {
+  (function preCacheDmgBuilder() {
+    const os = require('os');
+
+    const releaseName = 'dmg-builder@1.2.0';
+    const filename = 'dmgbuild-bundle-arm64-75c8a6c.tar.gz';
+    // Mirror URL confirmed working: https://registry.npmmirror.com/binary.html?path=electron-builder-binaries/
+    const downloadUrl = `https://registry.npmmirror.com/-/binary/electron-builder-binaries/${releaseName}/${filename}`;
+
+    // Replicate electron-builder's hashUrlSafe(baseUrl + '-' + releaseName + '-' + filename, 5)
+    const baseUrl = 'https://github.com/electron-userland/electron-builder-binaries/releases/download/';
+    const hashInput = `${baseUrl}-${releaseName}-${filename}`;
+    let h = 5381;
+    for (let i = 0; i < hashInput.length; i++) {
+      h = ((h << 5) + h) ^ hashInput.charCodeAt(i);
+    }
+    h >>>= 0;
+    const suffix = h.toString(36).padStart(5, '0').slice(0, 5);
+    const folderName = `dmgbuild-bundle-arm64-75c8a6c-${suffix}`;
+    const cacheDir = path.join(os.homedir(), 'Library', 'Caches', 'electron-builder', releaseName, folderName);
+    const completeMarker = `${cacheDir}.complete`;
+
+    if (fs.existsSync(completeMarker)) {
+      log('[dmg-builder] cache hit, skipping pre-download');
+      return;
+    }
+
+    log(`[dmg-builder] pre-caching arm64 binary from npmmirror…`);
+    fs.mkdirSync(cacheDir, { recursive: true });
+    const tmpFile = path.join(os.tmpdir(), filename);
+
+    try {
+      execSync(`curl -fsSL "${downloadUrl}" -o "${tmpFile}"`, { stdio: 'inherit' });
+      execSync(`tar -xzf "${tmpFile}" -C "${cacheDir}" --strip-components=1`, { stdio: 'inherit' });
+      fs.writeFileSync(completeMarker, '');
+      log('[dmg-builder] pre-cache done');
+    } catch (e) {
+      log(`[dmg-builder] WARN: pre-cache failed (${e.message}), electron-builder will try GitHub directly`);
+    }
+  })();
+}
+
 // ── Step 1: Build electron-vite bundle ──────────────────────────────────────
 log('1/4  electron-vite build...');
 execSync('pnpm exec electron-vite build', { cwd: appDir, stdio: 'inherit' });
@@ -157,16 +204,12 @@ log(`4/4  electron-builder ${platform} (projectDir = .deploy-temp)...`);
 // Read the installed version from appDir so electron-builder can locate it.
 const electronVersion = require(path.join(appDir, 'node_modules', 'electron', 'package.json')).version;
 
-const env = {
-  ...process.env,
-  ELECTRON_BUILDER_BINARIES_MIRROR:
-    'https://npmmirror.com/mirrors/electron-builder-binaries/',
-};
+// Delete ELECTRON_MIRROR / npm_config_electron_mirror from the env passed to
 // --projectDir points electron-builder at the deploy dir which has flat node_modules
 // --config.electronVersion passes the electron version since it's not in deployDir/node_modules
 execSync(
   `pnpm exec electron-builder ${platform} --projectDir "${deployDir}" --config.electronVersion=${electronVersion}`,
-  { cwd: appDir, stdio: 'inherit', env },
+  { cwd: appDir, stdio: 'inherit' },
 );
 
 log(`Done! Installer output → ${outputDir}`);
