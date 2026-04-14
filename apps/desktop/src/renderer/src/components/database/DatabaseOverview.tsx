@@ -66,6 +66,14 @@ interface ImportPreviewState {
   statements: string[]
 }
 
+interface StatementStats {
+  create: number
+  modify: number
+  insert: number
+  delete: number
+  other: number
+}
+
 export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
   const { connections } = useConnectionStore()
   const { openTableTab } = useQueryStore()
@@ -82,7 +90,9 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [showExportDialog, setShowExportDialog] = useState(false)
   const [exportMode, setExportMode] = useState<ExportMode>('full')
+  const [exportSelectedOnly, setExportSelectedOnly] = useState(false)
   const [importPreview, setImportPreview] = useState<ImportPreviewState | null>(null)
+  const [selectedTableNames, setSelectedTableNames] = useState<string[]>([])
 
   const summary = useMemo(() => {
     const totalSize = rows.reduce((sum, row) => sum + (row.totalSize ?? 0), 0)
@@ -121,9 +131,25 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
     return [...filtered].sort((left, right) => compareRows(left, right, sortKey, sortDirection))
   }, [rows, search, sortKey, sortDirection])
 
+  const visibleRowNames = useMemo(() => visibleRows.map((row) => row.name), [visibleRows])
+  const visibleSelectedCount = useMemo(
+    () => visibleRowNames.filter((name) => selectedTableNames.includes(name)).length,
+    [visibleRowNames, selectedTableNames]
+  )
+  const selectedTotal = selectedTableNames.length
+  const importStats = useMemo(
+    () => (importPreview ? classifySqlStatements(importPreview.statements) : null),
+    [importPreview]
+  )
+
   useEffect(() => {
     void loadData()
   }, [loadData, tab.id])
+
+  useEffect(() => {
+    setSelectedTableNames([])
+    setExportSelectedOnly(false)
+  }, [tab.id, databaseName])
 
   const copyDatabaseName = async (): Promise<void> => {
     if (!databaseName) return
@@ -144,7 +170,8 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
         tab.connectionId,
         databaseName,
         dbType,
-        exportMode
+        exportMode,
+        exportSelectedOnly ? selectedTableNames : undefined
       )
       const blob = new Blob([sql], { type: 'text/sql;charset=utf-8' })
       const url = URL.createObjectURL(blob)
@@ -216,6 +243,23 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
     }
     setSortKey(key)
     setSortDirection('asc')
+  }
+
+  const toggleRowSelection = (tableName: string): void => {
+    setSelectedTableNames((prev) =>
+      prev.includes(tableName) ? prev.filter((item) => item !== tableName) : [...prev, tableName]
+    )
+  }
+
+  const toggleVisibleSelection = (): void => {
+    setSelectedTableNames((prev) => {
+      const allSelected = visibleRowNames.length > 0 && visibleRowNames.every((name) => prev.includes(name))
+      if (allSelected) {
+        return prev.filter((name) => !visibleRowNames.includes(name))
+      }
+      const merged = new Set([...prev, ...visibleRowNames])
+      return Array.from(merged)
+    })
   }
 
   return (
@@ -301,6 +345,19 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
               <input type="radio" checked={exportMode === 'full'} onChange={() => setExportMode('full')} />
               <span>全量导出</span>
             </label>
+            <div className="pt-2 border-t border-app-border/60">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={exportSelectedOnly}
+                  onChange={(e) => setExportSelectedOnly(e.target.checked)}
+                />
+                <span>只导出选中表</span>
+              </label>
+              <div className="text-2xs text-text-muted mt-1">
+                当前已选 {selectedTotal} 张表（当前筛选视图中选中 {visibleSelectedCount}/{visibleRowNames.length}）
+              </div>
+            </div>
           </div>
           <div className="mt-4 flex items-center justify-end gap-2">
             <button
@@ -313,7 +370,7 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
             <button
               onClick={() => void handleExportDatabase()}
               className="px-3 py-1.5 rounded bg-accent-blue text-white hover:bg-blue-600 transition-colors text-xs disabled:opacity-40"
-              disabled={loading}
+              disabled={loading || (exportSelectedOnly && selectedTotal === 0)}
             >
               {loading ? '导出中...' : '开始导出'}
             </button>
@@ -326,6 +383,15 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
           <div className="space-y-3 text-xs text-text-secondary">
             <div>文件：{importPreview.fileName}</div>
             <div>将执行 {importPreview.statements.length} 条 SQL 语句。</div>
+            {importStats && (
+              <div className="grid grid-cols-2 gap-2 text-2xs">
+                <div className="rounded border border-app-border px-2 py-1">创建: {importStats.create}</div>
+                <div className="rounded border border-app-border px-2 py-1">修改: {importStats.modify}</div>
+                <div className="rounded border border-app-border px-2 py-1">插入: {importStats.insert}</div>
+                <div className="rounded border border-app-border px-2 py-1">删除: {importStats.delete}</div>
+                <div className="rounded border border-app-border px-2 py-1 col-span-2">其他: {importStats.other}</div>
+              </div>
+            )}
             <div className="rounded border border-app-border bg-app-input p-2 max-h-48 overflow-auto text-2xs text-text-muted whitespace-pre-wrap">
               {importPreview.statements.slice(0, 5).map((statement, index) => `${index + 1}. ${statement}`).join('\n\n')}
               {importPreview.statements.length > 5 ? `\n\n... 其余 ${importPreview.statements.length - 5} 条语句未展开` : ''}
@@ -362,6 +428,14 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
         <table className="w-full text-xs border-collapse" style={{ minWidth: '1320px' }}>
           <thead className="sticky top-0 z-10 bg-app-sidebar border-b border-app-border">
             <tr>
+              <th className="px-3 py-2 text-left text-text-secondary font-semibold border-r border-app-border whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  checked={visibleRowNames.length > 0 && visibleSelectedCount === visibleRowNames.length}
+                  onChange={toggleVisibleSelection}
+                  title="勾选当前筛选结果"
+                />
+              </th>
               {columns.map((column) => (
                 <th
                   key={column.key}
@@ -381,11 +455,11 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
           <tbody>
             {loading && rows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-text-muted">加载中...</td>
+                <td colSpan={13} className="px-4 py-8 text-center text-text-muted">加载中...</td>
               </tr>
             ) : visibleRows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-text-muted">
+                <td colSpan={13} className="px-4 py-8 text-center text-text-muted">
                   {rows.length === 0 ? '当前数据库暂无数据表信息' : '没有匹配的表'}
                 </td>
               </tr>
@@ -396,6 +470,14 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
                   onDoubleClick={() => openTableData(row.name)}
                   className={`${index % 2 === 0 ? 'bg-app-bg' : 'bg-app-panel'} border-b border-app-border hover:bg-app-hover cursor-pointer`}
                 >
+                  <td className="px-3 py-2 border-r border-app-border whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTableNames.includes(row.name)}
+                      onChange={() => toggleRowSelection(row.name)}
+                      title={`选择 ${row.name}`}
+                    />
+                  </td>
                   <td className="px-3 py-2 border-r border-app-border font-medium text-text-primary whitespace-nowrap">
                     <span className="inline-flex items-center gap-1.5">
                       <Table2 size={12} className="text-accent-orange shrink-0" />
@@ -592,13 +674,17 @@ async function buildDatabaseExport(
   connectionId: string,
   database: string,
   dbType: DBType,
-  mode: ExportMode
+  mode: ExportMode,
+  selectedTableNames?: string[]
 ): Promise<string> {
   if (!window.db) throw new Error('数据库 API 不可用')
 
   const schema = await window.db.getSchema(connectionId, database)
   const dbInfo = schema.databases.find((item) => item.name === database)
-  const tables = dbInfo?.tables ?? []
+  const selected = new Set((selectedTableNames ?? []).map((name) => name.toLowerCase()))
+  const tables = (dbInfo?.tables ?? []).filter((table) =>
+    selected.size === 0 ? true : selected.has(table.name.toLowerCase())
+  )
   const chunks: string[] = [
     '-- NexSQL Database Export',
     `-- Source: ${database}`,
@@ -639,6 +725,39 @@ async function buildDatabaseExport(
   }
 
   return chunks.join('\n')
+}
+
+function classifySqlStatements(statements: string[]): StatementStats {
+  const stats: StatementStats = { create: 0, modify: 0, insert: 0, delete: 0, other: 0 }
+
+  for (const raw of statements) {
+    const statement = raw.trim().toUpperCase()
+    if (!statement) continue
+
+    if (statement.startsWith('CREATE ')) {
+      stats.create++
+      continue
+    }
+
+    if (statement.startsWith('ALTER ') || statement.startsWith('UPDATE ') || statement.startsWith('REPLACE ')) {
+      stats.modify++
+      continue
+    }
+
+    if (statement.startsWith('INSERT ')) {
+      stats.insert++
+      continue
+    }
+
+    if (statement.startsWith('DELETE ') || statement.startsWith('DROP ') || statement.startsWith('TRUNCATE ')) {
+      stats.delete++
+      continue
+    }
+
+    stats.other++
+  }
+
+  return stats
 }
 
 function quoteIdentifier(type: DBType, value: string): string {
