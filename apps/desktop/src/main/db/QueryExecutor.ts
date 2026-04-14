@@ -230,6 +230,127 @@ export async function exportTableSQL(
   })
 }
 
+function escapeMySQLIdentifier(name: string): string {
+  return `\`${name.replace(/`/g, '``')}\``
+}
+
+function escapePostgresIdentifier(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`
+}
+
+function escapeMSSQLIdentifier(name: string): string {
+  return `[${name.replace(/]/g, ']]')}]`
+}
+
+export async function createDatabase(
+  connectionId: string,
+  database: string,
+  charset?: string,
+  collation?: string
+): Promise<void> {
+  return runWithReconnect(connectionId, async () => {
+    const driver = getDriver(connectionId)
+    const config = getConnectionConfig(connectionId)
+    const dbName = database.trim()
+    if (!dbName) throw new Error('数据库名不能为空')
+
+    if (config.type === 'mysql') {
+      const charsetSql = charset?.trim() ? ` CHARACTER SET ${charset.trim()}` : ''
+      const collateSql = collation?.trim() ? ` COLLATE ${collation.trim()}` : ''
+      await driver.execute(`CREATE DATABASE ${escapeMySQLIdentifier(dbName)}${charsetSql}${collateSql}`)
+      return
+    }
+
+    if (config.type === 'postgresql') {
+      await driver.execute(`CREATE DATABASE ${escapePostgresIdentifier(dbName)}`)
+      return
+    }
+
+    if (config.type === 'mssql') {
+      await driver.execute(`CREATE DATABASE ${escapeMSSQLIdentifier(dbName)}`)
+      return
+    }
+
+    throw new Error('当前数据库类型不支持创建数据库')
+  })
+}
+
+export async function dropDatabase(
+  connectionId: string,
+  database: string
+): Promise<void> {
+  return runWithReconnect(connectionId, async () => {
+    const driver = getDriver(connectionId)
+    const config = getConnectionConfig(connectionId)
+    const dbName = database.trim()
+    if (!dbName) throw new Error('数据库名不能为空')
+
+    if (config.type === 'mysql') {
+      // Avoid dropping the currently selected DB.
+      await driver.useDatabase('information_schema')
+      await driver.execute(`DROP DATABASE ${escapeMySQLIdentifier(dbName)}`)
+      return
+    }
+
+    if (config.type === 'postgresql') {
+      await driver.execute(`DROP DATABASE ${escapePostgresIdentifier(dbName)}`)
+      return
+    }
+
+    if (config.type === 'mssql') {
+      await driver.execute(`DROP DATABASE ${escapeMSSQLIdentifier(dbName)}`)
+      return
+    }
+
+    throw new Error('当前数据库类型不支持删除数据库')
+  })
+}
+
+export async function alterDatabaseCharset(
+  connectionId: string,
+  database: string,
+  charset: string,
+  collation?: string,
+  applyToAllTables = false
+): Promise<void> {
+  return runWithReconnect(connectionId, async () => {
+    const driver = getDriver(connectionId)
+    const config = getConnectionConfig(connectionId)
+    const dbName = database.trim()
+    const charsetName = charset.trim()
+
+    if (!dbName) throw new Error('数据库名不能为空')
+    if (!charsetName) throw new Error('字符集不能为空')
+
+    if (config.type !== 'mysql') {
+      throw new Error('仅 MySQL/MariaDB 支持修改数据库字符集')
+    }
+
+    const collateSql = collation?.trim() ? ` COLLATE ${collation.trim()}` : ''
+
+    await driver.execute(
+      `ALTER DATABASE ${escapeMySQLIdentifier(dbName)} CHARACTER SET ${charsetName}${collateSql}`
+    )
+
+    if (!applyToAllTables) return
+
+    const tableRows = await driver.execute(
+      `SELECT TABLE_NAME
+       FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = '${dbName.replace(/'/g, "''")}' AND TABLE_TYPE = 'BASE TABLE'
+       ORDER BY TABLE_NAME`
+    )
+
+    for (const row of tableRows.rows) {
+      const tableName = String(row['TABLE_NAME'] ?? row['table_name'] ?? '')
+      if (!tableName) continue
+      await driver.execute(
+        `ALTER TABLE ${escapeMySQLIdentifier(dbName)}.${escapeMySQLIdentifier(tableName)} CONVERT TO CHARACTER SET ${charsetName}${collateSql}`
+      )
+    }
+  })
+}
+
 function saveHistory(
   connectionId: string,
   sql: string,

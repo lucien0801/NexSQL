@@ -11,7 +11,7 @@ export function createDriver(config: ConnectionConfig, password: string): IDbDri
       return new MySQLDriver({
         host: config.host ?? 'localhost',
         port: config.port ?? 3306,
-        database: config.database,
+        database: config.database ?? '',
         user: config.username ?? '',
         password,
         ssl: config.ssl
@@ -21,7 +21,7 @@ export function createDriver(config: ConnectionConfig, password: string): IDbDri
       return new PostgresDriver({
         host: config.host ?? 'localhost',
         port: config.port ?? 5432,
-        database: config.database,
+        database: config.database ?? '',
         user: config.username ?? '',
         password,
         ssl: config.ssl
@@ -31,7 +31,7 @@ export function createDriver(config: ConnectionConfig, password: string): IDbDri
       return new MSSQLDriver({
         host: config.host ?? 'localhost',
         port: config.port ?? 1433,
-        database: config.database,
+        database: config.database ?? '',
         user: config.username ?? '',
         password,
         ssl: config.ssl

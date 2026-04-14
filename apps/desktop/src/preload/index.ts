@@ -36,6 +36,28 @@ const dbAPI = {
   getDatabases: (connectionId: string): Promise<string[]> =>
     ipcRenderer.invoke('db:getDatabases', connectionId),
 
+  createDatabase: (connectionId: string, database: string, charset?: string, collation?: string): Promise<void> =>
+    ipcRenderer.invoke('db:createDatabase', connectionId, database, charset, collation),
+
+  dropDatabase: (connectionId: string, database: string): Promise<void> =>
+    ipcRenderer.invoke('db:dropDatabase', connectionId, database),
+
+  alterDatabaseCharset: (
+    connectionId: string,
+    database: string,
+    charset: string,
+    collation?: string,
+    applyToAllTables?: boolean
+  ): Promise<void> =>
+    ipcRenderer.invoke(
+      'db:alterDatabaseCharset',
+      connectionId,
+      database,
+      charset,
+      collation,
+      applyToAllTables
+    ),
+
   getSchema: (connectionId: string, database?: string): Promise<DatabaseSchema> =>
     ipcRenderer.invoke('db:getSchema', connectionId, database),
 

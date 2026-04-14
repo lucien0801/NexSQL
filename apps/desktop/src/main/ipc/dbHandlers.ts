@@ -12,7 +12,19 @@ import {
   exportConnections,
   importConnections
 } from '../db/ConnectionManager'
-import { executeQuery, getDatabases, getSchema, getHistory, getTableColumns, getTableIndexes, getTableDDL, exportTableSQL } from '../db/QueryExecutor'
+import { 
+  executeQuery, 
+  getDatabases, 
+  getSchema, 
+  getHistory, 
+  getTableColumns, 
+  getTableIndexes, 
+  getTableDDL, 
+  exportTableSQL,
+  createDatabase,
+  dropDatabase,
+  alterDatabaseCharset 
+} from '../db/QueryExecutor'
 
 export function registerDbHandlers(): void {
   ipcMain.handle('db:listConnections', async () => {
@@ -119,4 +131,32 @@ export function registerDbHandlers(): void {
   ipcMain.handle('db:importConnections', async (_event, jsonStr: string) => {
     return importConnections(jsonStr)
   })
+
+  ipcMain.handle(
+    'db:createDatabase',
+    async (_event, connectionId: string, database: string, charset?: string, collation?: string) => {
+      return createDatabase(connectionId, database, charset, collation)
+    }
+  )
+
+  ipcMain.handle(
+    'db:dropDatabase',
+    async (_event, connectionId: string, database: string) => {
+      return dropDatabase(connectionId, database)
+    }
+  )
+
+  ipcMain.handle(
+    'db:alterDatabaseCharset',
+    async (
+      _event,
+      connectionId: string,
+      database: string,
+      charset: string,
+      collation?: string,
+      applyToAllTables?: boolean
+    ) => {
+      return alterDatabaseCharset(connectionId, database, charset, collation, applyToAllTables)
+    }
+  )
 }

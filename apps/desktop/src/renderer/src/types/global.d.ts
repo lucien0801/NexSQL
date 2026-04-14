@@ -14,6 +14,9 @@ declare global {
       disconnect(id: string): Promise<void>
       executeQuery(connectionId: string, sql: string, database?: string): Promise<QueryResult>
       getDatabases(connectionId: string): Promise<string[]>
+      createDatabase(connectionId: string, database: string, charset?: string, collation?: string): Promise<void>
+      dropDatabase(connectionId: string, database: string): Promise<void>
+      alterDatabaseCharset(connectionId: string, database: string, charset: string, collation?: string, applyToAllTables?: boolean): Promise<void>
       getSchema(connectionId: string, database?: string): Promise<DatabaseSchema>
       getTableColumns(connectionId: string, table: string, database?: string): Promise<SchemaColumn[]>
       getTableIndexes(connectionId: string, table: string, database?: string): Promise<Array<{ name: string; columns: string[]; unique: boolean; primary: boolean }>>
