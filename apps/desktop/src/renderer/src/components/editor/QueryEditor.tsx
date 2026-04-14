@@ -24,6 +24,8 @@ export function QueryEditor(): JSX.Element {
   const tableColumnsRef = useRef<TableColumnEntry[]>([])
   // alias → columns 专属缓存：alias 名 → 字段数组，直接用于补全查询
   const aliasColumnsRef = useRef<Map<string, Array<{ name: string; type: string }>>>(new Map())
+  // alias → tableName 映射：用于检测表名是否发生变化，变化时使字段缓存失效
+  const aliasTableRef = useRef<Map<string, string>>(new Map())
   const activeTabIdRef = useRef<string | null>(activeTabId)
   activeTabIdRef.current = activeTabId
 
@@ -204,21 +206,32 @@ export function QueryEditor(): JSX.Element {
         const statement = getCurrentSqlStatement(sql)
         const tableAliases = parseTableAliases(statement) // { a: 'app_app', b: 'app_user' ... }
 
-        // 只移除已不存在的别名
+        // 移除已不存在的别名；同时检查别名对应的表名是否变化，变了则使字段缓存失效
         const currentAliases = new Set(Object.keys(tableAliases).map((k) => k.toLowerCase()))
         for (const key of aliasColumnsRef.current.keys()) {
-          if (!currentAliases.has(key)) aliasColumnsRef.current.delete(key)
+          if (!currentAliases.has(key)) {
+            aliasColumnsRef.current.delete(key)
+            aliasTableRef.current.delete(key)
+          }
         }
 
         void (async () => {
           for (const [alias, rawTable] of Object.entries(tableAliases)) {
             const qKey = alias.toLowerCase()
-            if (aliasColumnsRef.current.has(qKey)) continue // 已缓存，跳过
-
             const normalized = normalizeSqlIdentifier(rawTable).replace(/\s*\.\s*/g, '.')
             const parts = normalized.split('.')
             const tableName = normalizeSqlIdentifier(parts[parts.length - 1])
             if (!tableName) continue
+            const tableKey = tableName.toLowerCase()
+
+            // 表名变化时使旧缓存失效
+            const prevTable = aliasTableRef.current.get(qKey)
+            if (prevTable && prevTable !== tableKey) {
+              aliasColumnsRef.current.delete(qKey)
+              aliasTableRef.current.delete(qKey)
+            }
+
+            if (aliasColumnsRef.current.has(qKey)) continue // 表名未变且已缓存，跳过
 
             const targetDb = parts.length > 1
               ? normalizeSqlIdentifier(parts[0])
@@ -229,6 +242,7 @@ export function QueryEditor(): JSX.Element {
             )
             if (cached) {
               aliasColumnsRef.current.set(qKey, cached.columns)
+              aliasTableRef.current.set(qKey, tableName.toLowerCase())
               continue
             }
 
@@ -238,6 +252,7 @@ export function QueryEditor(): JSX.Element {
 
             if (columns.length > 0) {
               aliasColumnsRef.current.set(qKey, columns)
+              aliasTableRef.current.set(qKey, tableName.toLowerCase())
               tableColumnsRef.current = [
                 ...tableColumnsRef.current,
                 { table: tableName, database: targetDb ?? '', columns }
