@@ -6,6 +6,7 @@ import { QueryEditor } from '../editor/QueryEditor'
 import { ResultsPanel } from '../results/ResultsPanel'
 import { AIInputBar } from '../ai/AIInputBar'
 import { TableDataView } from '../table/TableDataView'
+import { DatabaseOverview } from '../database/DatabaseOverview'
 import { ConnectionDialog } from '../connection/ConnectionDialog'
 import { SettingsDialog } from '../settings/SettingsDialog'
 import { AppSettingsDialog } from '../settings/AppSettingsDialog'
@@ -83,6 +84,10 @@ export function AppLayout(): JSX.Element {
             {activeTab?.type === 'table' ? (
               <div className="flex-1 overflow-hidden">
                 <TableDataView tab={activeTab} />
+              </div>
+            ) : activeTab?.type === 'database' ? (
+              <div className="flex-1 overflow-hidden">
+                <DatabaseOverview tab={activeTab} />
               </div>
             ) : (
               <PanelGroup direction="vertical" className="flex-1 overflow-hidden">

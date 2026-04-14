@@ -527,6 +527,7 @@ function DatabaseNode({
   connectionId,
   defaultExpanded,
   filter,
+  onOpenDatabase,
   onDropDatabase,
   onCreateTable,
   onAlterCharset
@@ -536,6 +537,7 @@ function DatabaseNode({
   connectionId: string
   defaultExpanded: boolean
   filter: string
+  onOpenDatabase: (connectionId: string, database: string) => void
   onDropDatabase: (connectionId: string, database: string) => void
   onCreateTable: (connectionId: string, database: string) => void
   onAlterCharset: (connectionId: string, database: string) => void
@@ -569,18 +571,28 @@ function DatabaseNode({
 
   return (
     <div>
-      <button
-        onClick={() => setManualExpanded((v) => !v)}
+      <div
         onContextMenu={handleDbCtx}
         style={{ paddingLeft: `${depth * 12 + 12}px` }}
         className="w-full flex items-center gap-1 py-0.5 pr-3 text-xs text-text-secondary hover:text-text-primary hover:bg-app-hover transition-colors"
-        title="右键数据库可进行管理操作"
+        title="点击数据库查看概览，右键可进行管理操作"
       >
-        {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-        <Database size={11} className="text-accent-blue shrink-0" />
-        <span className="truncate">{db.name}</span>
-        <span className="text-2xs text-text-muted ml-auto">{hasFilter ? `${visibleTables.length}/${db.tables.length}` : db.tables.length}</span>
-      </button>
+        <button
+          onClick={() => setManualExpanded((v) => !v)}
+          className="shrink-0 rounded p-0.5 hover:bg-app-active"
+          title={expanded ? '收起' : '展开'}
+        >
+          {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+        </button>
+        <button
+          onClick={() => onOpenDatabase(connectionId, db.name)}
+          className="min-w-0 flex-1 flex items-center gap-1 text-left"
+        >
+          <Database size={11} className="text-accent-blue shrink-0" />
+          <span className="truncate">{db.name}</span>
+        </button>
+        <span className="text-2xs text-text-muted ml-auto shrink-0">{hasFilter ? `${visibleTables.length}/${db.tables.length}` : db.tables.length}</span>
+      </div>
       {expanded && visibleTables.map((table) => (
         <TableNode
           key={table.name}
@@ -631,6 +643,7 @@ function SchemaConnectionNode({
   isActive,
   filter,
   onCreateDatabase,
+  onOpenDatabase,
   onCreateTable,
   onDropDatabase,
   onAlterCharset
@@ -641,6 +654,7 @@ function SchemaConnectionNode({
   isActive: boolean
   filter: string
   onCreateDatabase: (connectionId: string) => void
+  onOpenDatabase: (connectionId: string, database: string) => void
   onCreateTable: (connectionId: string, database: string) => void
   onDropDatabase: (connectionId: string, database: string) => void
   onAlterCharset: (connectionId: string, database: string) => void
@@ -686,6 +700,7 @@ function SchemaConnectionNode({
           connectionId={connectionId}
           defaultExpanded={databases.length === 1}
           filter={filter}
+          onOpenDatabase={onOpenDatabase}
           onDropDatabase={onDropDatabase}
           onCreateTable={onCreateTable}
           onAlterCharset={onAlterCharset}
@@ -698,7 +713,7 @@ function SchemaConnectionNode({
 // ──────────────────── SchemaTree (root) ────────────────────
 export function SchemaTree(): JSX.Element {
   const { connections, statuses, activeConnectionId } = useConnectionStore()
-  const { schema, loadSchema } = useQueryStore()
+  const { schema, loadSchema, openDatabaseTab } = useQueryStore()
   const [filter, setFilter] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [dialog, setDialog] = useState<SchemaDialog>({ type: 'none' })
@@ -749,6 +764,10 @@ export function SchemaTree(): JSX.Element {
       database,
       tableName: ''
     })
+  }
+
+  const handleOpenDatabase = (connectionId: string, database: string): void => {
+    openDatabaseTab(connectionId, database)
   }
 
   const handleDialogChange = (patch: Record<string, string | boolean>): void => {
@@ -858,6 +877,7 @@ export function SchemaTree(): JSX.Element {
             isActive={activeConnectionId === conn.id}
             filter={filter}
             onCreateDatabase={handleCreateDatabase}
+            onOpenDatabase={handleOpenDatabase}
             onCreateTable={handleCreateTable}
             onDropDatabase={handleDropDatabase}
             onAlterCharset={handleAlterDatabaseCharset}

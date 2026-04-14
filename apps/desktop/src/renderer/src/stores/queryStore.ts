@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { QueryResult, QueryHistoryEntry, DatabaseSchema, SchemaColumn } from '@shared/types/query'
 
-export type QueryTabType = 'query' | 'table'
+export type QueryTabType = 'query' | 'table' | 'database'
 export type TableSortDirection = 'asc' | 'desc'
 
 export interface TableSortRule {
@@ -65,6 +65,7 @@ interface QueryState {
   // Tab actions
   newTab: (connectionId?: string) => string
   openTableTab: (connectionId: string, tableName: string, database?: string) => string
+  openDatabaseTab: (connectionId: string, database: string) => string
   closeTab: (tabId: string) => void
   setActiveTab: (tabId: string) => void
   updateTabSQL: (tabId: string, sql: string) => void
@@ -150,6 +151,35 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         pendingInserts: [],
         pendingDeletes: {}
       }
+    }
+    set((state) => ({ tabs: [...state.tabs, tab], activeTabId: id }))
+    return id
+  },
+
+  openDatabaseTab: (connectionId, database) => {
+    const existing = get().tabs.find(
+      (tab) =>
+        tab.type === 'database' &&
+        tab.connectionId === connectionId &&
+        (tab.selectedDatabase ?? null) === database
+    )
+
+    if (existing) {
+      set({ activeTabId: existing.id })
+      return existing.id
+    }
+
+    const id = crypto.randomUUID()
+    const tab: QueryTab = {
+      id,
+      title: database,
+      type: 'database',
+      connectionId,
+      sql: '',
+      result: null,
+      isLoading: false,
+      error: null,
+      selectedDatabase: database
     }
     set((state) => ({ tabs: [...state.tabs, tab], activeTabId: id }))
     return id
