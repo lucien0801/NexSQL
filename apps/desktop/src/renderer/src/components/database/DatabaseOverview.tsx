@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Database, RefreshCw, Table2, Copy, Search, ArrowUpDown, ExternalLink } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Database, RefreshCw, Table2, Copy, Search, ArrowUpDown, ExternalLink, Download, Upload } from 'lucide-react'
 import type { DBType } from '@shared/types/connection'
+import type { SchemaTable } from '@shared/types/query'
 import type { QueryTab } from '@renderer/stores/queryStore'
 import { useConnectionStore } from '@renderer/stores/connectionStore'
 import { useQueryStore } from '@renderer/stores/queryStore'
@@ -56,6 +58,14 @@ const columns: ColumnDef[] = [
   { key: 'comment', label: 'comment' }
 ]
 
+type ExportMode = 'structure' | 'data' | 'full'
+
+interface ImportPreviewState {
+  fileName: string
+  sql: string
+  statements: string[]
+}
+
 export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
   const { connections } = useConnectionStore()
   const { openTableTab } = useQueryStore()
@@ -65,9 +75,14 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
   const [rows, setRows] = useState<TableMetaRow[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [showExportDialog, setShowExportDialog] = useState(false)
+  const [exportMode, setExportMode] = useState<ExportMode>('full')
+  const [importPreview, setImportPreview] = useState<ImportPreviewState | null>(null)
 
   const summary = useMemo(() => {
     const totalSize = rows.reduce((sum, row) => sum + (row.totalSize ?? 0), 0)
@@ -79,6 +94,7 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
     if (!tab.connectionId || !databaseName || !window.db) return
     setLoading(true)
     setError(null)
+    setMessage(null)
     try {
       const sql = buildDatabaseOverviewQuery(dbType, databaseName)
       const result = await window.db.executeQuery(tab.connectionId, sql, databaseName)
@@ -118,6 +134,76 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
     await loadData()
   }
 
+  const handleExportDatabase = async (): Promise<void> => {
+    if (!tab.connectionId || !databaseName || !window.db) return
+    try {
+      setError(null)
+      setMessage(null)
+      setLoading(true)
+      const sql = await buildDatabaseExport(
+        tab.connectionId,
+        databaseName,
+        dbType,
+        exportMode
+      )
+      const blob = new Blob([sql], { type: 'text/sql;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${sanitizeFileName(databaseName)}-${exportMode}.sql`
+      link.click()
+      URL.revokeObjectURL(url)
+      setMessage(`已导出数据库 ${databaseName}（${exportMode === 'full' ? '全量' : exportMode === 'structure' ? '仅结构' : '仅数据'}）`)
+      setShowExportDialog(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleImportClick = (): void => {
+    fileInputRef.current?.click()
+  }
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0]
+    if (!file || !tab.connectionId || !databaseName || !window.db) return
+
+    try {
+      setError(null)
+      setMessage(null)
+      const sql = await file.text()
+      const statements = splitSqlStatements(sql)
+      if (statements.length === 0) throw new Error('未解析到可执行的 SQL 语句')
+      setImportPreview({ fileName: file.name, sql, statements })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  const confirmImport = async (): Promise<void> => {
+    if (!importPreview || !tab.connectionId || !databaseName || !window.db) return
+    try {
+      setError(null)
+      setMessage(null)
+      setLoading(true)
+      for (const statement of importPreview.statements) {
+        const result = await window.db.executeQuery(tab.connectionId, statement, databaseName)
+        if (result.error) throw new Error(result.error)
+      }
+      await loadData()
+      setMessage(`已导入 ${importPreview.statements.length} 条 SQL 语句到 ${databaseName}`)
+      setImportPreview(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const openTableData = (tableName: string): void => {
     if (!tab.connectionId || !databaseName) return
     openTableTab(tab.connectionId, tableName, databaseName)
@@ -152,6 +238,22 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
           </button>
         </div>
         <button
+          onClick={() => handleImportClick()}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border border-app-border text-text-secondary hover:text-text-primary hover:border-accent-blue transition-colors"
+          title="导入 SQL 文件到当前数据库"
+        >
+          <Upload size={12} />
+          导入
+        </button>
+        <button
+          onClick={() => setShowExportDialog(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border border-app-border text-text-secondary hover:text-text-primary hover:border-accent-blue transition-colors"
+          title="导出当前数据库 SQL"
+        >
+          <Download size={12} />
+          导出
+        </button>
+        <button
           onClick={() => void refresh()}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border border-app-border text-text-secondary hover:text-text-primary hover:border-accent-blue transition-colors"
         >
@@ -180,6 +282,77 @@ export function DatabaseOverview({ tab }: DatabaseOverviewProps): JSX.Element {
           </button>
         )}
       </div>
+
+      <input ref={fileInputRef} type="file" accept=".sql,.txt" className="hidden" onChange={handleImportFile} />
+
+      {showExportDialog && (
+        <ActionDialog title="导出数据库" onClose={() => !loading && setShowExportDialog(false)}>
+          <div className="space-y-3 text-xs text-text-secondary">
+            <div>请选择导出内容：</div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="radio" checked={exportMode === 'structure'} onChange={() => setExportMode('structure')} />
+              <span>只导出结构</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="radio" checked={exportMode === 'data'} onChange={() => setExportMode('data')} />
+              <span>只导出数据</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="radio" checked={exportMode === 'full'} onChange={() => setExportMode('full')} />
+              <span>全量导出</span>
+            </label>
+          </div>
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              onClick={() => setShowExportDialog(false)}
+              className="px-3 py-1.5 rounded border border-app-border text-text-secondary hover:text-text-primary hover:border-accent-blue transition-colors text-xs"
+              disabled={loading}
+            >
+              取消
+            </button>
+            <button
+              onClick={() => void handleExportDatabase()}
+              className="px-3 py-1.5 rounded bg-accent-blue text-white hover:bg-blue-600 transition-colors text-xs disabled:opacity-40"
+              disabled={loading}
+            >
+              {loading ? '导出中...' : '开始导出'}
+            </button>
+          </div>
+        </ActionDialog>
+      )}
+
+      {importPreview && (
+        <ActionDialog title="导入预检" onClose={() => !loading && setImportPreview(null)}>
+          <div className="space-y-3 text-xs text-text-secondary">
+            <div>文件：{importPreview.fileName}</div>
+            <div>将执行 {importPreview.statements.length} 条 SQL 语句。</div>
+            <div className="rounded border border-app-border bg-app-input p-2 max-h-48 overflow-auto text-2xs text-text-muted whitespace-pre-wrap">
+              {importPreview.statements.slice(0, 5).map((statement, index) => `${index + 1}. ${statement}`).join('\n\n')}
+              {importPreview.statements.length > 5 ? `\n\n... 其余 ${importPreview.statements.length - 5} 条语句未展开` : ''}
+            </div>
+          </div>
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <button
+              onClick={() => setImportPreview(null)}
+              className="px-3 py-1.5 rounded border border-app-border text-text-secondary hover:text-text-primary hover:border-accent-blue transition-colors text-xs"
+              disabled={loading}
+            >
+              取消
+            </button>
+            <button
+              onClick={() => void confirmImport()}
+              className="px-3 py-1.5 rounded bg-accent-blue text-white hover:bg-blue-600 transition-colors text-xs disabled:opacity-40"
+              disabled={loading}
+            >
+              {loading ? '导入中...' : '确认导入'}
+            </button>
+          </div>
+        </ActionDialog>
+      )}
+
+      {message && (
+        <div className="px-4 py-2 text-xs text-accent-green border-b border-app-border bg-green-900/10">{message}</div>
+      )}
 
       {error && (
         <div className="px-4 py-2 text-xs text-accent-red border-b border-app-border bg-red-900/10">{error}</div>
@@ -394,4 +567,177 @@ function formatBytes(value: number | null): string {
     unitIndex++
   }
   return `${size >= 10 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`
+}
+
+function sanitizeFileName(value: string): string {
+  return value.replace(/[\\/:*?"<>|]+/g, '_')
+}
+
+function ActionDialog({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }): JSX.Element {
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[70] bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 z-[71] flex items-center justify-center p-4">
+        <div className="w-full max-w-lg rounded border border-app-border bg-app-sidebar shadow-2xl">
+          <div className="px-4 py-3 border-b border-app-border text-sm font-semibold text-text-primary">{title}</div>
+          <div className="px-4 py-3">{children}</div>
+        </div>
+      </div>
+    </>,
+    document.body
+  )
+}
+
+async function buildDatabaseExport(
+  connectionId: string,
+  database: string,
+  dbType: DBType,
+  mode: ExportMode
+): Promise<string> {
+  if (!window.db) throw new Error('数据库 API 不可用')
+
+  const schema = await window.db.getSchema(connectionId, database)
+  const dbInfo = schema.databases.find((item) => item.name === database)
+  const tables = dbInfo?.tables ?? []
+  const chunks: string[] = [
+    '-- NexSQL Database Export',
+    `-- Source: ${database}`,
+    `-- Export Mode: ${mode}`,
+    `-- Exported At: ${new Date().toISOString()}`,
+    ''
+  ]
+
+  if (dbType === 'mysql' && mode !== 'data') {
+    chunks.push(`CREATE DATABASE IF NOT EXISTS ${quoteIdentifier(dbType, database)};`)
+    chunks.push(`USE ${quoteIdentifier(dbType, database)};`)
+    chunks.push('')
+  }
+
+  for (const table of tables) {
+    if (mode !== 'data') {
+      const ddl = await window.db.getTableDDL(connectionId, table.name, database)
+      chunks.push(`-- ${table.type.toUpperCase()}: ${table.name}`)
+      chunks.push(ddl.endsWith(';') ? ddl : `${ddl};`)
+    }
+
+    if (mode !== 'structure' && table.type === 'table') {
+      const result = await window.db.executeQuery(
+        connectionId,
+        `SELECT * FROM ${quoteIdentifier(dbType, table.name)}`,
+        database
+      )
+      if (result.error) throw new Error(result.error)
+      if (result.rows.length > 0) {
+        const columnNames = result.columns.map((column) => column.name)
+        for (const row of result.rows) {
+          chunks.push(buildInsertStatement(dbType, table.name, columnNames, row))
+        }
+      }
+    }
+
+    chunks.push('')
+  }
+
+  return chunks.join('\n')
+}
+
+function quoteIdentifier(type: DBType, value: string): string {
+  if (type === 'mssql') return `[${value.replace(/]/g, ']]')}]`
+  if (type === 'postgresql' || type === 'sqlite') return `"${value.replace(/"/g, '""')}"`
+  return `\`${value.replace(/`/g, '``')}\``
+}
+
+function toSqlLiteral(value: unknown): string {
+  if (value === null || value === undefined) return 'NULL'
+  if (typeof value === 'number' || typeof value === 'bigint') return String(value)
+  if (typeof value === 'boolean') return value ? '1' : '0'
+  return `'${String(value).replace(/'/g, "''")}'`
+}
+
+function buildInsertStatement(type: DBType, tableName: string, columns: string[], row: Record<string, unknown>): string {
+  const table = quoteIdentifier(type, tableName)
+  const cols = columns.map((column) => quoteIdentifier(type, column)).join(', ')
+  const values = columns.map((column) => toSqlLiteral(row[column])).join(', ')
+  return `INSERT INTO ${table} (${cols}) VALUES (${values});`
+}
+
+function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = []
+  let current = ''
+  let inSingle = false
+  let inDouble = false
+  let inBacktick = false
+  let inLineComment = false
+  let inBlockComment = false
+
+  for (let index = 0; index < sql.length; index++) {
+    const char = sql[index]
+    const next = sql[index + 1] ?? ''
+
+    if (inLineComment) {
+      if (char === '\n') {
+        inLineComment = false
+        current += char
+      }
+      continue
+    }
+
+    if (inBlockComment) {
+      if (char === '*' && next === '/') {
+        inBlockComment = false
+        index++
+      }
+      continue
+    }
+
+    if (!inSingle && !inDouble && !inBacktick) {
+      if (char === '-' && next === '-') {
+        inLineComment = true
+        index++
+        continue
+      }
+      if (char === '#') {
+        inLineComment = true
+        continue
+      }
+      if (char === '/' && next === '*') {
+        inBlockComment = true
+        index++
+        continue
+      }
+    }
+
+    if (char === "'" && !inDouble && !inBacktick) {
+      const escaped = sql[index - 1] === '\\'
+      if (!escaped) inSingle = !inSingle
+      current += char
+      continue
+    }
+
+    if (char === '"' && !inSingle && !inBacktick) {
+      const escaped = sql[index - 1] === '\\'
+      if (!escaped) inDouble = !inDouble
+      current += char
+      continue
+    }
+
+    if (char === '`' && !inSingle && !inDouble) {
+      inBacktick = !inBacktick
+      current += char
+      continue
+    }
+
+    if (char === ';' && !inSingle && !inDouble && !inBacktick) {
+      const statement = current.trim()
+      if (statement) statements.push(statement)
+      current = ''
+      continue
+    }
+
+    current += char
+  }
+
+  const tail = current.trim()
+  if (tail) statements.push(tail)
+  return statements.filter((statement) => !/^DELIMITER\b/i.test(statement.trim()))
 }

@@ -73,6 +73,12 @@ const dbAPI = {
   exportTableSQL: (connectionId: string, table: string, database?: string): Promise<string> =>
     ipcRenderer.invoke('db:exportTableSQL', connectionId, table, database),
 
+  exportDatabaseSQL: (connectionId: string, database?: string): Promise<string> =>
+    ipcRenderer.invoke('db:exportDatabaseSQL', connectionId, database),
+
+  importDatabaseSQL: (connectionId: string, sql: string, database?: string): Promise<number> =>
+    ipcRenderer.invoke('db:importDatabaseSQL', connectionId, sql, database),
+
   getHistory: (connectionId?: string, limit?: number): Promise<QueryHistoryEntry[]> =>
     ipcRenderer.invoke('db:getHistory', connectionId, limit),
 

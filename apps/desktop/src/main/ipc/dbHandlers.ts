@@ -21,6 +21,8 @@ import {
   getTableIndexes, 
   getTableDDL, 
   exportTableSQL,
+  exportDatabaseSQL,
+  importDatabaseSQL,
   createDatabase,
   dropDatabase,
   alterDatabaseCharset 
@@ -110,6 +112,20 @@ export function registerDbHandlers(): void {
     'db:exportTableSQL',
     async (_event, connectionId: string, table: string, database?: string) => {
       return exportTableSQL(connectionId, table, database)
+    }
+  )
+
+  ipcMain.handle(
+    'db:exportDatabaseSQL',
+    async (_event, connectionId: string, database?: string) => {
+      return exportDatabaseSQL(connectionId, database)
+    }
+  )
+
+  ipcMain.handle(
+    'db:importDatabaseSQL',
+    async (_event, connectionId: string, sql: string, database?: string) => {
+      return importDatabaseSQL(connectionId, sql, database)
     }
   )
 

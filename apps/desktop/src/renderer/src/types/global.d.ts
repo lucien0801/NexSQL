@@ -22,6 +22,8 @@ declare global {
       getTableIndexes(connectionId: string, table: string, database?: string): Promise<Array<{ name: string; columns: string[]; unique: boolean; primary: boolean }>>
       getTableDDL(connectionId: string, table: string, database?: string): Promise<string>
       exportTableSQL(connectionId: string, table: string, database?: string): Promise<string>
+      exportDatabaseSQL(connectionId: string, database?: string): Promise<string>
+      importDatabaseSQL(connectionId: string, sql: string, database?: string): Promise<number>
       getHistory(connectionId?: string, limit?: number): Promise<QueryHistoryEntry[]>
       duplicateConnection(id: string): Promise<ConnectionConfig>
       exportConnections(): Promise<string>

@@ -230,6 +230,197 @@ export async function exportTableSQL(
   })
 }
 
+function quoteIdentifierByType(type: 'mysql' | 'postgresql' | 'mssql' | 'sqlite', name: string): string {
+  if (type === 'mssql') return escapeMSSQLIdentifier(name)
+  if (type === 'postgresql' || type === 'sqlite') return escapePostgresIdentifier(name)
+  return escapeMySQLIdentifier(name)
+}
+
+function toSqlLiteral(value: unknown): string {
+  if (value === null || value === undefined) return 'NULL'
+  if (typeof value === 'number' || typeof value === 'bigint') return String(value)
+  if (typeof value === 'boolean') return value ? '1' : '0'
+  if (value instanceof Date) return `'${value.toISOString().replace(/'/g, "''")}'`
+  return `'${String(value).replace(/'/g, "''")}'`
+}
+
+function buildSelectAllSQL(type: 'mysql' | 'postgresql' | 'mssql' | 'sqlite', table: string): string {
+  const ident = quoteIdentifierByType(type, table)
+  return `SELECT * FROM ${ident}`
+}
+
+function buildInsertSQL(
+  type: 'mysql' | 'postgresql' | 'mssql' | 'sqlite',
+  table: string,
+  columns: string[],
+  row: Record<string, unknown>
+): string {
+  const tableIdent = quoteIdentifierByType(type, table)
+  const cols = columns.map((col) => quoteIdentifierByType(type, col)).join(', ')
+  const values = columns.map((col) => toSqlLiteral(row[col])).join(', ')
+  return `INSERT INTO ${tableIdent} (${cols}) VALUES (${values});`
+}
+
+function splitSqlStatements(sql: string): string[] {
+  const statements: string[] = []
+  let current = ''
+  let inSingle = false
+  let inDouble = false
+  let inBacktick = false
+  let inLineComment = false
+  let inBlockComment = false
+
+  for (let index = 0; index < sql.length; index++) {
+    const char = sql[index]
+    const next = sql[index + 1] ?? ''
+
+    if (inLineComment) {
+      if (char === '\n') {
+        inLineComment = false
+        current += char
+      }
+      continue
+    }
+
+    if (inBlockComment) {
+      if (char === '*' && next === '/') {
+        inBlockComment = false
+        index++
+      }
+      continue
+    }
+
+    if (!inSingle && !inDouble && !inBacktick) {
+      if (char === '-' && next === '-') {
+        inLineComment = true
+        index++
+        continue
+      }
+      if (char === '#' ) {
+        inLineComment = true
+        continue
+      }
+      if (char === '/' && next === '*') {
+        inBlockComment = true
+        index++
+        continue
+      }
+    }
+
+    if (char === "'" && !inDouble && !inBacktick) {
+      const escaped = sql[index - 1] === '\\'
+      if (!escaped) inSingle = !inSingle
+      current += char
+      continue
+    }
+
+    if (char === '"' && !inSingle && !inBacktick) {
+      const escaped = sql[index - 1] === '\\'
+      if (!escaped) inDouble = !inDouble
+      current += char
+      continue
+    }
+
+    if (char === '`' && !inSingle && !inDouble) {
+      inBacktick = !inBacktick
+      current += char
+      continue
+    }
+
+    if (char === ';' && !inSingle && !inDouble && !inBacktick) {
+      const statement = current.trim()
+      if (statement) statements.push(statement)
+      current = ''
+      continue
+    }
+
+    current += char
+  }
+
+  const tail = current.trim()
+  if (tail) statements.push(tail)
+  return statements.filter((statement) => !/^DELIMITER\b/i.test(statement.trim()))
+}
+
+export async function exportDatabaseSQL(
+  connectionId: string,
+  database?: string
+): Promise<string> {
+  return runWithReconnect(connectionId, async () => {
+    const driver = getDriver(connectionId)
+    const config = getConnectionConfig(connectionId)
+    const targetDb = database ?? config.database ?? ''
+    const dbType = config.type
+
+    if (!targetDb && dbType !== 'sqlite') {
+      throw new Error('请选择要导出的数据库')
+    }
+
+    if (targetDb) {
+      await driver.useDatabase(targetDb)
+    }
+
+    const tables = await driver.getTables(targetDb)
+    const chunks: string[] = [
+      '-- NexSQL Database Export',
+      `-- Source: ${targetDb || 'main'}`,
+      `-- Exported At: ${new Date().toISOString()}`,
+      ''
+    ]
+
+    if (dbType === 'mysql' && targetDb) {
+      chunks.push(`CREATE DATABASE IF NOT EXISTS ${escapeMySQLIdentifier(targetDb)};`)
+      chunks.push(`USE ${escapeMySQLIdentifier(targetDb)};`)
+      chunks.push('')
+    }
+
+    for (const table of tables) {
+      const ddl = await driver.getTableDDL(table.name, targetDb)
+      chunks.push(`-- ${table.type.toUpperCase()}: ${table.name}`)
+      chunks.push(ddl.endsWith(';') ? ddl : `${ddl};`)
+
+      if (table.type === 'table') {
+        const dataResult = await driver.execute(buildSelectAllSQL(dbType, table.name))
+        if (dataResult.rows.length > 0) {
+          const columnNames = dataResult.columns.map((column) => column.name)
+          for (const row of dataResult.rows) {
+            chunks.push(buildInsertSQL(dbType, table.name, columnNames, row))
+          }
+        }
+      }
+
+      chunks.push('')
+    }
+
+    return chunks.join('\n')
+  })
+}
+
+export async function importDatabaseSQL(
+  connectionId: string,
+  sql: string,
+  database?: string
+): Promise<number> {
+  return runWithReconnect(connectionId, async () => {
+    const driver = getDriver(connectionId)
+    const config = getConnectionConfig(connectionId)
+    const targetDb = database ?? config.database ?? ''
+    const statements = splitSqlStatements(sql)
+
+    if (statements.length === 0) return 0
+
+    if (targetDb) {
+      await driver.useDatabase(targetDb)
+    }
+
+    for (const statement of statements) {
+      await driver.execute(statement)
+    }
+
+    return statements.length
+  })
+}
+
 function escapeMySQLIdentifier(name: string): string {
   return `\`${name.replace(/`/g, '``')}\``
 }
