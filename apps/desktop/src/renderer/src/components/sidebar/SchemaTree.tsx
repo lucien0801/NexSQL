@@ -572,10 +572,23 @@ function TableNode({
 }
 
 function ColumnRow({ col, depth }: { col: SchemaColumn; depth: number }): JSX.Element {
+  const handleCopyColumn = async (e: React.MouseEvent<HTMLDivElement>): Promise<void> => {
+    e.preventDefault()
+    try {
+      await navigator.clipboard.writeText(col.name)
+    } catch {
+      // ignore clipboard write errors
+    }
+  }
+
   return (
     <div
       style={{ paddingLeft: `${depth * 12 + 12}px` }}
       className="flex items-center gap-1.5 py-0.5 pr-3 text-2xs text-text-muted"
+      onContextMenu={(e) => {
+        void handleCopyColumn(e)
+      }}
+      title="右键复制字段名"
     >
       {col.primaryKey ? (
         <Key size={9} className="shrink-0 text-accent-yellow" />

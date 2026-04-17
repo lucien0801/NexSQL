@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { RefreshCw, Plus, Save, Copy, Search, ChevronLeft, ChevronRight, X, Filter, Download, Trash2, Database, Rows3, HardDrive, Info } from 'lucide-react'
+import { RefreshCw, Plus, Save, Copy, Search, ChevronLeft, ChevronRight, X, Filter, Download, Trash2, Database, Rows3, HardDrive, Info, Braces } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { SchemaColumn } from '@shared/types/query'
 import type { DBType } from '@shared/types/connection'
@@ -88,6 +88,7 @@ export function TableDataView({ tab }: TableDataViewProps): JSX.Element {
   const [metaLoading, setMetaLoading] = useState(false)
   const [metaError, setMetaError] = useState<string | null>(null)
   const [showDetailsPanel, setShowDetailsPanel] = useState(true)
+  const [jsonViewField, setJsonViewField] = useState<{ name: string; value: string } | null>(null)
 
   const dbType = connection?.type ?? 'mysql'
   const pkColumns = useMemo(
@@ -629,6 +630,10 @@ export function TableDataView({ tab }: TableDataViewProps): JSX.Element {
     setRowMenu(null)
   }
 
+  const copyTextSilent = async (value: string): Promise<void> => {
+    await navigator.clipboard.writeText(value)
+  }
+
   const getSortMeta = (columnName: string): { direction: TableSortDirection; index: number } | null => {
     const index = tableView.sortRules.findIndex((rule) => rule.column === columnName)
     if (index === -1) return null
@@ -1127,12 +1132,34 @@ export function TableDataView({ tab }: TableDataViewProps): JSX.Element {
                   <div className="mt-2 space-y-2">
                     {tableView.columns.map((column) => {
                       const value = selectedDisplayRow.row[column.name] == null ? '' : String(selectedDisplayRow.row[column.name])
+                      const prettyJson = /^\s*[{[]/.test(value) ? tryFormatJson(value) : null
                       return (
                         <label key={column.name} className="block">
-                          <div className="mb-1 flex items-center gap-1 text-2xs text-text-muted">
-                            <Info size={10} />
-                            {column.name}
-                            {column.primaryKey ? ' (PK)' : ''}
+                          <div className="mb-1 flex items-center justify-between gap-2 text-2xs text-text-muted">
+                            <span className="inline-flex items-center gap-1 min-w-0">
+                              <Info size={10} />
+                              <span className="truncate">{column.name}{column.primaryKey ? ' (PK)' : ''}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              {prettyJson !== null && (
+                                <button
+                                  type="button"
+                                  onClick={() => setJsonViewField({ name: column.name, value: prettyJson })}
+                                  className="p-0.5 rounded text-text-muted hover:text-accent-blue transition-colors"
+                                  title="查看 JSON 格式化"
+                                >
+                                  <Braces size={10} />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => { void copyTextSilent(column.name) }}
+                                className="p-0.5 rounded text-text-muted hover:text-text-primary transition-colors"
+                                title="复制字段名"
+                              >
+                                <Copy size={10} />
+                              </button>
+                            </span>
                           </div>
                           <input
                             type="text"
@@ -1182,6 +1209,38 @@ export function TableDataView({ tab }: TableDataViewProps): JSX.Element {
           onCopyUpdate={() => void copySelectedUpdateSql(rowMenu.selectedRows)}
           onCopyCsv={() => void copySelectedCsv(rowMenu.selectedRows)}
         />
+      )}
+      {jsonViewField && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setJsonViewField(null)}>
+          <div className="bg-app-sidebar border border-app-border rounded-lg shadow-2xl w-[560px] max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-app-border">
+              <span className="inline-flex items-center gap-2 text-sm font-medium text-text-primary">
+                <Braces size={14} />
+                {jsonViewField.name}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { void copyTextSilent(jsonViewField.value) }}
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs text-text-secondary hover:text-text-primary hover:bg-app-active transition-colors"
+                  title="复制 JSON"
+                >
+                  <Copy size={12} />
+                  复制
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setJsonViewField(null)}
+                  className="p-1 rounded text-text-muted hover:text-text-primary hover:bg-app-active transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+            <pre className="p-4 text-xs text-text-primary overflow-auto flex-1 leading-5 whitespace-pre-wrap break-all select-text cursor-text">{jsonViewField.value}</pre>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )
@@ -1324,6 +1383,17 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLElement
     ? !!target.closest('input, textarea, select, button, a, [contenteditable="true"]')
     : false
+}
+
+function tryFormatJson(input: string): string | null {
+  const trimmed = input.trim()
+  if (!trimmed) return null
+  try {
+    const parsed = JSON.parse(trimmed)
+    return JSON.stringify(parsed, null, 2)
+  } catch {
+    return null
+  }
 }
 
 function objectToEditableRow(row: Record<string, unknown>, columns: SchemaColumn[]): Record<string, string> {
