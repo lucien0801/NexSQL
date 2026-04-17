@@ -50,14 +50,21 @@ interface CtxMenu {
 function ContextMenu({
   menu,
   onClose,
-  onDesign
+  onDesign,
+  onRefreshSchema
 }: {
   menu: CtxMenu
   onClose: () => void
   onDesign: () => void
+  onRefreshSchema: () => void
 }): JSX.Element {
   const { connections } = useConnectionStore()
   const { openTableTab, newTab, updateTabSQL, updateTabConnection, updateTabDatabase, setActiveTab } = useQueryStore()
+  const [confirm, setConfirm] = useState<'truncate' | 'drop' | null>(null)
+
+  const conn = connections.find((c) => c.id === menu.connectionId)
+  const dbType = conn?.type ?? 'mysql'
+  const qt = (name: string): string => quoteIdentifierByType(dbType, name)
 
   const openInNewTab = (sql: string): void => {
     const tabId = newTab(menu.connectionId)
@@ -78,13 +85,12 @@ function ContextMenu({
   }
 
   const handleSelectSQL = (): void => {
-    const conn = connections.find((c) => c.id === menu.connectionId)
-    const sql = buildPreviewSQL(menu.table.name, conn?.type ?? 'mysql')
+    const sql = buildPreviewSQL(menu.table.name, dbType)
     openInNewTab(sql)
   }
 
   const handleCount = (): void => {
-    openInNewTab(`SELECT COUNT(*) AS total FROM \`${menu.table.name}\`;`)
+    openInNewTab(`SELECT COUNT(*) AS total FROM ${qt(menu.table.name)};`)
   }
 
   const handleExportSQL = async (): Promise<void> => {
@@ -102,7 +108,36 @@ function ContextMenu({
     onClose()
   }
 
-  const items = [
+  const handleTruncateConfirm = async (): Promise<void> => {
+    if (!window.db) return
+    try {
+      await window.db.executeQuery(
+        menu.connectionId,
+        `TRUNCATE TABLE ${qt(menu.table.name)};`,
+        menu.database
+      )
+    } catch {
+      // ignore
+    }
+    onClose()
+  }
+
+  const handleDropConfirm = async (): Promise<void> => {
+    if (!window.db) return
+    try {
+      await window.db.executeQuery(
+        menu.connectionId,
+        `DROP TABLE ${qt(menu.table.name)};`,
+        menu.database
+      )
+      onRefreshSchema()
+    } catch {
+      // ignore
+    }
+    onClose()
+  }
+
+  const normalItems = [
     { label: '查看数据 (表格)', icon: '▶', action: handleSelectAll },
     { label: '查看数据 (SQL)', icon: 'S', action: handleSelectSQL },
     { label: '统计行数 (COUNT)', icon: '#', action: handleCount },
@@ -110,6 +145,9 @@ function ContextMenu({
     { label: '设计表 (字段/索引/DDL)', icon: '⊞', action: handleDesign },
     { divider: true },
     { label: '导出数据为 INSERT SQL', icon: '↑', action: handleExportSQL },
+    { divider: true },
+    { label: '清空表', icon: '⊘', action: () => setConfirm('truncate'), danger: true },
+    { label: '删除表', icon: '✕', action: () => setConfirm('drop'), danger: true },
   ]
 
   return createPortal(
@@ -122,18 +160,48 @@ function ContextMenu({
         <div className="px-3 py-1 text-text-muted text-2xs border-b border-app-border mb-1 truncate">
           {menu.table.name}
         </div>
-        {items.map((item, i) =>
-          'divider' in item ? (
-            <div key={i} className="border-t border-app-border my-1" />
-          ) : (
-            <button
-              key={i}
-              onClick={item.action}
-              className="w-full text-left px-3 py-1.5 flex items-center gap-2 text-text-secondary hover:bg-app-active hover:text-text-primary transition-colors"
-            >
-              <span className="font-mono text-text-muted w-4 text-center shrink-0">{item.icon}</span>
-              {item.label}
-            </button>
+
+        {confirm ? (
+          <div className="px-3 py-2">
+            <p className="text-text-primary mb-2">
+              {confirm === 'truncate'
+                ? `确认清空表 "${menu.table.name}"？此操作不可撤销。`
+                : `确认删除表 "${menu.table.name}"？此操作不可撤销。`}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={confirm === 'truncate' ? handleTruncateConfirm : handleDropConfirm}
+                className="flex-1 px-2 py-1 rounded bg-accent-red text-white text-xs hover:opacity-90 transition-opacity"
+              >
+                确认
+              </button>
+              <button
+                onClick={() => setConfirm(null)}
+                className="flex-1 px-2 py-1 rounded border border-app-border text-text-secondary text-xs hover:text-text-primary transition-colors"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        ) : (
+          normalItems.map((item, i) =>
+            'divider' in item ? (
+              <div key={i} className="border-t border-app-border my-1" />
+            ) : (
+              <button
+                key={i}
+                onClick={item.action}
+                className={clsx(
+                  'w-full text-left px-3 py-1.5 flex items-center gap-2 transition-colors',
+                  item.danger
+                    ? 'text-accent-red hover:bg-red-900/20'
+                    : 'text-text-secondary hover:bg-app-active hover:text-text-primary'
+                )}
+              >
+                <span className="font-mono text-text-muted w-4 text-center shrink-0">{item.icon}</span>
+                {item.label}
+              </button>
+            )
           )
         )}
       </div>
@@ -542,6 +610,7 @@ function DatabaseNode({
   onCreateTable: (connectionId: string, database: string) => void
   onAlterCharset: (connectionId: string, database: string) => void
 }): JSX.Element {
+  const { loadSchema } = useQueryStore()
   const hasFilter = filter.trim().length > 0
   const visibleTables = hasFilter
     ? db.tables.filter((t) => t.name.toLowerCase().includes(filter.toLowerCase()))
@@ -586,6 +655,7 @@ function DatabaseNode({
         </button>
         <button
           onClick={() => onOpenDatabase(connectionId, db.name)}
+          onDoubleClick={() => setManualExpanded((v) => !v)}
           className="min-w-0 flex-1 flex items-center gap-1 text-left"
         >
           <Database size={11} className="text-accent-blue shrink-0" />
@@ -612,6 +682,7 @@ function DatabaseNode({
             setDesigner(contextMenu.table)
             setContextMenu(null)
           }}
+          onRefreshSchema={() => loadSchema(connectionId, db.name)}
         />
       )}
       {designer && (

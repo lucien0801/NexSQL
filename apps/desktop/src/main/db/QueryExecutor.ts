@@ -168,7 +168,8 @@ export async function getTableColumns(
       type: c.type,
       nullable: c.nullable,
       primaryKey: c.primaryKey,
-      defaultValue: c.defaultValue
+      defaultValue: c.defaultValue,
+      collation: c.collation
     }))
   })
 }

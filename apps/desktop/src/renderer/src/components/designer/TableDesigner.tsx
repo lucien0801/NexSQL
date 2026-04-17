@@ -22,6 +22,7 @@ interface ColumnDraft {
   nullable: boolean
   autoIncrement: boolean
   defaultValue: string
+  collation: string     // e.g. 'utf8mb4_unicode_ci'
   _origName: string     // original name (for CHANGE COLUMN detection)
   _isNew: boolean
   _isDeleted: boolean
@@ -54,6 +55,7 @@ function buildType(baseType: string, length: string): string {
 function colToSQL(col: ColumnDraft): string {
   const q = (s: string): string => `\`${s}\``
   const parts: string[] = [q(col.name), buildType(col.baseType, col.length)]
+  if (col.collation) parts.push(`CHARACTER SET ${col.collation.split('_')[0]} COLLATE ${col.collation}`)
   if (col.primaryKey) {
     parts.push('NOT NULL')
     if (col.autoIncrement) parts.push('AUTO_INCREMENT')
@@ -94,7 +96,7 @@ function generateAlterSQL(
       const orig = origCols.find((o) => o._origName === c._origName)
       if (!orig) return
       const sig = (d: ColumnDraft): string =>
-        [d.name, buildType(d.baseType, d.length), d.nullable, d.primaryKey, d.autoIncrement, d.defaultValue].join('|')
+        [d.name, buildType(d.baseType, d.length), d.nullable, d.primaryKey, d.autoIncrement, d.defaultValue, d.collation].join('|')
       if (sig(orig) !== sig(c)) {
         stmts.push(`ALTER TABLE ${tblRef}\n  CHANGE COLUMN ${q(c._origName)} ${colToSQL(c)};`)
       }
@@ -117,6 +119,16 @@ function generateAlterSQL(
 
   return stmts.length > 0 ? stmts.join('\n') : '-- 无变更'
 }
+
+// ── Common collations ─────────────────────────────────────────
+const COMMON_COLLATIONS = [
+  'utf8mb4_unicode_ci', 'utf8mb4_unicode_520_ci', 'utf8mb4_general_ci', 'utf8mb4_bin',
+  'utf8_unicode_ci', 'utf8_general_ci', 'utf8_bin',
+  'latin1_swedish_ci', 'latin1_general_ci', 'latin1_bin',
+  'ascii_general_ci', 'ascii_bin',
+  'gbk_chinese_ci', 'gbk_bin',
+  'gb2312_chinese_ci',
+]
 
 // ── Cell input style ─────────────────────────────────────────
 const cell =
@@ -162,6 +174,7 @@ export function TableDesigner({ connectionId, table, database, onClose }: TableD
       nullable: c.nullable,
       autoIncrement: false,
       defaultValue: c.defaultValue ?? '',
+      collation: c.collation ?? '',
       _origName: c.name,
       _isNew: false,
       _isDeleted: false,
@@ -221,6 +234,7 @@ export function TableDesigner({ connectionId, table, database, onClose }: TableD
         nullable: true,
         autoIncrement: false,
         defaultValue: '',
+        collation: '',
         _origName: '',
         _isNew: true,
         _isDeleted: false,
@@ -469,6 +483,7 @@ function ColumnsEditor({
               <th className="text-center px-1 py-2 text-text-muted font-medium w-9">非空</th>
               <th className="text-center px-1 py-2 text-text-muted font-medium w-9">AI</th>
               <th className="text-left px-2 py-2 text-text-muted font-medium min-w-[70px]">默认值</th>
+              <th className="text-left px-2 py-2 text-text-muted font-medium min-w-[120px]">编码</th>
               <th className="w-7" />
             </tr>
           </thead>
@@ -547,6 +562,22 @@ function ColumnsEditor({
                     placeholder="NULL"
                     className={clsx(cell, 'font-mono text-text-muted text-2xs')}
                   />
+                </td>
+                <td className="px-1 py-0.5">
+                  <select
+                    value={col.collation}
+                    onChange={(e) => onUpdate(col._id, { collation: e.target.value })}
+                    disabled={col._isDeleted}
+                    className={clsx(cell, 'font-mono text-text-muted text-2xs cursor-pointer')}
+                  >
+                    <option value="">—</option>
+                    {COMMON_COLLATIONS.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                    {col.collation && !COMMON_COLLATIONS.includes(col.collation) && (
+                      <option value={col.collation}>{col.collation}</option>
+                    )}
+                  </select>
                 </td>
                 <td className="px-1 py-0.5 text-center">
                   <button
