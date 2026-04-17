@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -10,6 +10,8 @@ import { useRef } from 'react'
 import { Download, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import type { QueryResult } from '@shared/types/query'
 import { clsx } from 'clsx'
+import { useAIStore } from '@renderer/stores/aiStore'
+import { useQueryStore } from '@renderer/stores/queryStore'
 
 interface ResultsPanelProps {
   result: QueryResult | null
@@ -18,6 +20,17 @@ interface ResultsPanelProps {
 
 export function ResultsPanel({ result, isLoading }: ResultsPanelProps): JSX.Element {
   const [activeResultTab, setActiveResultTab] = useState<'results' | 'messages'>('results')
+  const { activeTabId } = useQueryStore()
+  const optimizeResult = useAIStore((state) => (activeTabId ? state.optimizeResults[activeTabId] : undefined))
+  const docResult = useAIStore((state) => state.docResult)
+  const isOptimizing = useAIStore((state) => state.isOptimizing)
+  const optimizeLogs = useAIStore((state) => state.logs.filter((log) => log.task === 'optimize').slice(0, 3))
+
+  useEffect(() => {
+    if (optimizeResult || isOptimizing) {
+      setActiveResultTab('messages')
+    }
+  }, [optimizeResult, isOptimizing])
 
   if (isLoading) {
     return (
@@ -110,9 +123,52 @@ export function ResultsPanel({ result, isLoading }: ResultsPanelProps): JSX.Elem
             </div>
           )
         ) : (
-          <div className="p-4 font-mono text-xs text-text-secondary">
+          <div className="h-full overflow-auto p-4 font-mono text-xs text-text-secondary">
             <div>{result.error ?? `执行成功，影响 ${result.rowCount} 行 (${result.durationMs}ms)`}</div>
             <div className="mt-2 text-text-muted whitespace-pre-wrap">{result.sql}</div>
+            {optimizeResult && (
+              <div className="mt-4 p-3 rounded border border-app-border bg-app-panel">
+                <div className="text-text-primary font-semibold mb-1">AI 优化诊断</div>
+                <div className="max-h-[420px] overflow-auto text-text-muted whitespace-pre-wrap">{optimizeResult.recommendations}</div>
+                {optimizeResult.semanticMatches.length > 0 && (
+                  <div className="mt-2 text-[11px] text-text-muted whitespace-pre-wrap">
+                    语义索引命中: {optimizeResult.semanticMatches.join(', ')}
+                  </div>
+                )}
+                <div className="mt-2 max-h-40 overflow-auto text-[11px] text-text-muted whitespace-pre-wrap">
+                  EXPLAIN: {optimizeResult.explainSQL}
+                </div>
+              </div>
+            )}
+            {isOptimizing && (
+              <div className="mt-4 p-3 rounded border border-app-border bg-app-panel">
+                <div className="text-text-primary font-semibold mb-1">AI 优化进行中</div>
+                <div className="space-y-1">
+                  {optimizeLogs.length === 0 ? (
+                    <div className="text-text-muted text-xs">正在准备优化任务...</div>
+                  ) : (
+                    optimizeLogs.map((log) => (
+                      <div key={log.id} className="text-xs text-text-muted">{log.message}</div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+            {docResult && (
+              <div className="mt-4 p-3 rounded border border-app-border bg-app-panel">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="text-text-primary font-semibold">AI 数据字典</div>
+                  <button
+                    onClick={() => copyText(docResult.markdown)}
+                    className="text-xs text-text-muted hover:text-text-primary"
+                    title="复制 Markdown"
+                  >
+                    复制 Markdown
+                  </button>
+                </div>
+                <pre className="max-h-[420px] overflow-auto text-text-muted whitespace-pre-wrap overflow-x-auto">{docResult.markdown}</pre>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -253,4 +309,8 @@ function exportCSV(result: QueryResult): void {
   a.download = `nexsql-export-${Date.now()}.csv`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+function copyText(text: string): void {
+  void navigator.clipboard.writeText(text).catch(() => {})
 }

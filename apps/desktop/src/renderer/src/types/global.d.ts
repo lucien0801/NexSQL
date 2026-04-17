@@ -1,6 +1,25 @@
 import type { ConnectionConfig, ConnectionFormData, ConnectionTestResult } from '@shared/types/connection'
 import type { QueryResult, DatabaseSchema, QueryHistoryEntry, SchemaColumn } from '@shared/types/query'
-import type { AIConfig, NLToSQLRequest } from '@shared/types/ai'
+import type {
+  AIConfig,
+  NLToSQLRequest,
+  SQLOptimizeRequest,
+  SQLOptimizeResponse,
+  AIDesignRequest,
+  AIDesignResponse,
+  AIDocRequest,
+  AIDocResponse,
+  SemanticIndexBuildRequest,
+  SemanticIndexBuildResponse,
+  SemanticIndexItem,
+  SemanticIndexUpdateRequest,
+  ERGraphLoadRequest,
+  ERGraphLoadResponse,
+  ERGraphSaveRequest,
+  ERGraphSaveResponse,
+  ERGraphInferRequest,
+  ERGraphInferResponse
+} from '@shared/types/ai'
 
 declare global {
   interface Window {
@@ -33,6 +52,15 @@ declare global {
       getConfig(): Promise<AIConfig>
       updateConfig(config: Partial<AIConfig>): Promise<void>
       generateSQL(request: NLToSQLRequest): Promise<string>
+      optimizeSQL(request: SQLOptimizeRequest): Promise<SQLOptimizeResponse>
+      generateDesignSQL(request: AIDesignRequest): Promise<AIDesignResponse>
+      generateSchemaDoc(request: AIDocRequest): Promise<AIDocResponse>
+      buildSemanticIndex(request: SemanticIndexBuildRequest): Promise<SemanticIndexBuildResponse>
+      getSemanticIndexStatus(connectionId: string): Promise<SemanticIndexItem[]>
+      updateSemanticIndexItem(request: SemanticIndexUpdateRequest): Promise<SemanticIndexItem>
+      getERGraph(request: ERGraphLoadRequest): Promise<ERGraphLoadResponse>
+      saveERGraph(request: ERGraphSaveRequest): Promise<ERGraphSaveResponse>
+      inferSchemaRelations(request: ERGraphInferRequest): Promise<ERGraphInferResponse>
       onSQLToken(callback: (token: string) => void): () => void
       onSQLDone(callback: () => void): () => void
     }

@@ -1,4 +1,4 @@
-import { Database, History, Plus, Settings } from 'lucide-react'
+import { Database, History, Plus, Settings, Sparkles } from 'lucide-react'
 import { ConnectionList } from './ConnectionList'
 import { SchemaTree } from './SchemaTree'
 import { useUIStore } from '@renderer/stores/uiStore'
@@ -8,7 +8,7 @@ import { clsx } from 'clsx'
 import type { QueryHistoryEntry } from '@shared/types/query'
 
 export function Sidebar(): JSX.Element {
-  const { sidebarTab, setSidebarTab, openConnectionDialog, setShowAppSettings } = useUIStore()
+  const { sidebarTab, setSidebarTab, openConnectionDialog, setShowAppSettings, windowTab, setWindowTab } = useUIStore()
   const { history, loadHistory } = useQueryStore()
   const { t } = useI18nStore()
 
@@ -45,6 +45,18 @@ export function Sidebar(): JSX.Element {
             title={t('sidebar.history')}
           >
             <History size={14} />
+          </button>
+          <button
+            onClick={() => setWindowTab('ai-workbench')}
+            className={clsx(
+              'p-1.5 rounded text-xs flex items-center gap-1 transition-colors',
+              windowTab === 'ai-workbench'
+                ? 'bg-app-active text-white'
+                : 'text-text-secondary hover:text-text-primary hover:bg-app-hover'
+            )}
+            title="AI 工作台"
+          >
+            <Sparkles size={14} />
           </button>
         </div>
         <div className="flex gap-1">

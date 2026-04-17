@@ -14,11 +14,13 @@ import { useConnectionStore } from '@renderer/stores/connectionStore'
 import { useQueryStore } from '@renderer/stores/queryStore'
 import { useUIStore } from '@renderer/stores/uiStore'
 import { usePrefsStore, applyFontSize, applyTheme } from '@renderer/stores/prefsStore'
+import { AIWorkbench } from '../ai/AIWorkbench'
+import { clsx } from 'clsx'
 
 export function AppLayout(): JSX.Element {
   const { loadConnections } = useConnectionStore()
   const { tabs, activeTabId, newTab } = useQueryStore()
-  const { showConnectionDialog, showSettings, showAppSettings } = useUIStore()
+  const { showConnectionDialog, showSettings, showAppSettings, windowTab, setWindowTab } = useUIStore()
   const { fontSize, theme } = usePrefsStore()
 
   useEffect(() => {
@@ -78,36 +80,69 @@ export function AppLayout(): JSX.Element {
         {/* Main content */}
         <Panel defaultSize={82} minSize={50}>
           <div className="flex flex-col h-full">
-            {/* Tab bar */}
-            <TabBar />
+            <div className="flex items-center gap-1 border-b border-app-border px-2 py-1">
+              <button
+                onClick={() => setWindowTab('workspace')}
+                className={clsx(
+                  'rounded px-2 py-1 text-xs transition-colors',
+                  windowTab === 'workspace'
+                    ? 'bg-app-active text-white'
+                    : 'text-text-secondary hover:bg-app-hover hover:text-text-primary'
+                )}
+              >
+                工作区
+              </button>
+              <button
+                onClick={() => setWindowTab('ai-workbench')}
+                className={clsx(
+                  'rounded px-2 py-1 text-xs transition-colors',
+                  windowTab === 'ai-workbench'
+                    ? 'bg-app-active text-white'
+                    : 'text-text-secondary hover:bg-app-hover hover:text-text-primary'
+                )}
+              >
+                AI 工作台
+              </button>
+            </div>
 
-            {activeTab?.type === 'table' ? (
+            {windowTab === 'ai-workbench' ? (
               <div className="flex-1 overflow-hidden">
-                <TableDataView tab={activeTab} />
-              </div>
-            ) : activeTab?.type === 'database' ? (
-              <div className="flex-1 overflow-hidden">
-                <DatabaseOverview tab={activeTab} />
+                <AIWorkbench />
               </div>
             ) : (
-              <PanelGroup direction="vertical" className="flex-1 overflow-hidden">
-                <Panel defaultSize={55} minSize={20}>
-                  <div className="flex flex-col h-full">
-                    {/* AI input bar */}
-                    <AIInputBar />
-                    {/* SQL editor */}
-                    <div className="flex-1 overflow-hidden">
-                      <QueryEditor />
-                    </div>
+              <>
+                {/* Tab bar */}
+                <TabBar />
+
+                {activeTab?.type === 'table' ? (
+                  <div className="flex-1 overflow-hidden">
+                    <TableDataView tab={activeTab} />
                   </div>
-                </Panel>
+                ) : activeTab?.type === 'database' ? (
+                  <div className="flex-1 overflow-hidden">
+                    <DatabaseOverview tab={activeTab} />
+                  </div>
+                ) : (
+                  <PanelGroup direction="vertical" className="flex-1 overflow-hidden">
+                    <Panel defaultSize={55} minSize={20}>
+                      <div className="flex flex-col h-full">
+                        {/* AI input bar */}
+                        <AIInputBar />
+                        {/* SQL editor */}
+                        <div className="flex-1 overflow-hidden">
+                          <QueryEditor />
+                        </div>
+                      </div>
+                    </Panel>
 
-                <PanelResizeHandle className="h-px bg-app-border hover:bg-accent-blue transition-colors" />
+                    <PanelResizeHandle className="h-px bg-app-border hover:bg-accent-blue transition-colors" />
 
-                <Panel defaultSize={45} minSize={15}>
-                  <ResultsPanel result={activeTab?.result ?? null} isLoading={activeTab?.isLoading ?? false} />
-                </Panel>
-              </PanelGroup>
+                    <Panel defaultSize={45} minSize={15}>
+                      <ResultsPanel result={activeTab?.result ?? null} isLoading={activeTab?.isLoading ?? false} />
+                    </Panel>
+                  </PanelGroup>
+                )}
+              </>
             )}
           </div>
         </Panel>

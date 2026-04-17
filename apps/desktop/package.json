@@ -1,6 +1,6 @@
 {
   "name": "nexsql-desktop",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "NexSQL - AI-Powered Database Client",
   "author": "NexSQL Allen.Zhang",
   "packageManager": "pnpm@10.33.0",

@@ -6,7 +6,26 @@ import type {
   QueryHistoryEntry,
   SchemaColumn
 } from '@shared/types/query'
-import type { AIConfig, NLToSQLRequest } from '@shared/types/ai'
+import type {
+  AIConfig,
+  NLToSQLRequest,
+  SQLOptimizeRequest,
+  SQLOptimizeResponse,
+  AIDesignRequest,
+  AIDesignResponse,
+  AIDocRequest,
+  AIDocResponse,
+  SemanticIndexBuildRequest,
+  SemanticIndexBuildResponse,
+  SemanticIndexItem,
+  SemanticIndexUpdateRequest,
+  ERGraphLoadRequest,
+  ERGraphLoadResponse,
+  ERGraphSaveRequest,
+  ERGraphSaveResponse,
+  ERGraphInferRequest,
+  ERGraphInferResponse
+} from '@shared/types/ai'
 
 const dbAPI = {
   listConnections: (): Promise<ConnectionConfig[]> =>
@@ -101,6 +120,33 @@ const aiAPI = {
 
   generateSQL: (request: NLToSQLRequest): Promise<string> =>
     ipcRenderer.invoke('ai:generateSQL', request),
+
+  optimizeSQL: (request: SQLOptimizeRequest): Promise<SQLOptimizeResponse> =>
+    ipcRenderer.invoke('ai:optimizeSQL', request),
+
+  generateDesignSQL: (request: AIDesignRequest): Promise<AIDesignResponse> =>
+    ipcRenderer.invoke('ai:generateDesignSQL', request),
+
+  generateSchemaDoc: (request: AIDocRequest): Promise<AIDocResponse> =>
+    ipcRenderer.invoke('ai:generateSchemaDoc', request),
+
+  buildSemanticIndex: (request: SemanticIndexBuildRequest): Promise<SemanticIndexBuildResponse> =>
+    ipcRenderer.invoke('ai:buildSemanticIndex', request),
+
+  getSemanticIndexStatus: (connectionId: string): Promise<SemanticIndexItem[]> =>
+    ipcRenderer.invoke('ai:getSemanticIndexStatus', connectionId),
+
+  updateSemanticIndexItem: (request: SemanticIndexUpdateRequest): Promise<SemanticIndexItem> =>
+    ipcRenderer.invoke('ai:updateSemanticIndexItem', request),
+
+  getERGraph: (request: ERGraphLoadRequest): Promise<ERGraphLoadResponse> =>
+    ipcRenderer.invoke('ai:getERGraph', request),
+
+  saveERGraph: (request: ERGraphSaveRequest): Promise<ERGraphSaveResponse> =>
+    ipcRenderer.invoke('ai:saveERGraph', request),
+
+  inferSchemaRelations: (request: ERGraphInferRequest): Promise<ERGraphInferResponse> =>
+    ipcRenderer.invoke('ai:inferSchemaRelations', request),
 
   onSQLToken: (callback: (token: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, token: string): void => callback(token)

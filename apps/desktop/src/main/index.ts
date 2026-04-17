@@ -42,6 +42,10 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  if (is.dev) {
+    mainWindow.webContents.openDevTools()
+  }
 }
 
 app.whenReady().then(() => {

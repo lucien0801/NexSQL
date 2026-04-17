@@ -1,12 +1,14 @@
-﻿import { useRef, useCallback, useState, useEffect } from 'react'
+﻿import { useRef, useCallback, useState, useEffect, useMemo } from 'react'
 import MonacoEditor, { type OnMount } from '@monaco-editor/react'
 import { KeyMod, KeyCode, languages, type editor, type IDisposable } from 'monaco-editor'
-import { Play, Loader2, ChevronDown, Download, AlignLeft, Minimize2 } from 'lucide-react'
+import { Play, Loader2, ChevronDown, Download, AlignLeft, Minimize2, Sparkles, BrainCircuit } from 'lucide-react'
 import { format as formatSQL } from 'sql-formatter'
 import { clsx } from 'clsx'
 import { useQueryStore } from '@renderer/stores/queryStore'
 import { useConnectionStore } from '@renderer/stores/connectionStore'
 import { usePrefsStore } from '@renderer/stores/prefsStore'
+import { useAIStore } from '@renderer/stores/aiStore'
+import { useUIStore } from '@renderer/stores/uiStore'
 
 type TableColumnEntry = {
   table: string
@@ -18,6 +20,8 @@ export function QueryEditor(): JSX.Element {
   const { tabs, activeTabId, updateTabSQL, updateTabConnection, updateTabDatabase, loadSchema } = useQueryStore()
   const { connections, statuses } = useConnectionStore()
   const { fontSize, theme } = usePrefsStore()
+  const { optimizeSQL, isOptimizing, semanticIndexStatus, loadSemanticIndexStatus } = useAIStore()
+  const { setWindowTab } = useUIStore()
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const completionDisposableRef = useRef<IDisposable | null>(null)
   const completionSuggestionsRef = useRef<Array<Omit<languages.CompletionItem, 'range'>>>([])
@@ -46,6 +50,20 @@ export function QueryEditor(): JSX.Element {
   )
 
   const editorFontSize = fontSize === 'small' ? 12 : fontSize === 'large' ? 16 : 14
+  const currentStatement = useMemo(() => getCurrentSqlStatement(activeTab?.sql ?? ''), [activeTab?.sql])
+  const referencedTables = useMemo(() => extractReferencedTables(currentStatement), [currentStatement])
+  const aliasEntries = useMemo(() => Object.entries(parseTableAliases(currentStatement)), [currentStatement])
+  const semanticItems = activeTab?.connectionId ? semanticIndexStatus[activeTab.connectionId] ?? [] : []
+  const semanticMatches = useMemo(() => {
+    const tableSet = new Set(referencedTables.map((table) => table.toLowerCase()))
+    return semanticItems.filter((item) => tableSet.has(item.tableName.toLowerCase()))
+  }, [referencedTables, semanticItems])
+
+  useEffect(() => {
+    if (activeTab?.connectionId) {
+      void loadSemanticIndexStatus(activeTab.connectionId)
+    }
+  }, [activeTab?.connectionId, loadSemanticIndexStatus])
 
   const handleRun = useCallback((): void => {
     const tabId = activeTabIdRef.current
@@ -93,6 +111,27 @@ export function QueryEditor(): JSX.Element {
     link.click()
     URL.revokeObjectURL(url)
   }
+
+  const handleOptimizeSQL = async (): Promise<void> => {
+    if (!activeTabId || !activeTab?.connectionId) return
+
+    const selection = editorRef.current?.getSelection()
+    const model = editorRef.current?.getModel()
+    const selectedSql =
+      selection && model && !selection.isEmpty()
+        ? model.getValueInRange(selection).trim()
+        : ''
+    const sqlToOptimize = selectedSql || activeTab.sql.trim()
+    if (!sqlToOptimize) return
+
+    await optimizeSQL(
+      activeTabId,
+      sqlToOptimize,
+      activeTab.connectionId,
+      activeTab.selectedDatabase ?? undefined
+    )
+  }
+
 
   const handleMount: OnMount = (ed, monaco) => {
     editorRef.current = ed
@@ -394,7 +433,18 @@ export function QueryEditor(): JSX.Element {
           执行
         </button>
 
-        <button          onClick={handleFormatSQL}
+        <button
+          onClick={handleOptimizeSQL}
+          disabled={!activeTab.connectionId || !activeTab.sql.trim() || isOptimizing}
+          className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border border-app-border text-text-secondary hover:text-text-primary hover:border-accent-blue transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          title="AI 优化 SQL（优先分析选中内容）"
+        >
+          {isOptimizing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+          AI 优化
+        </button>
+
+        <button
+          onClick={handleFormatSQL}
           disabled={!activeTab.sql.trim()}
           className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border border-app-border text-text-secondary hover:text-text-primary hover:border-accent-blue transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
           title="美化 SQL"
@@ -413,7 +463,8 @@ export function QueryEditor(): JSX.Element {
           压缩
         </button>
 
-        <button          onClick={handleSaveSQL}
+        <button
+          onClick={handleSaveSQL}
           disabled={!activeTab.sql.trim()}
           className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border border-app-border text-text-secondary hover:text-text-primary hover:border-accent-blue transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
           title="保存 SQL 为文件"
@@ -514,6 +565,56 @@ export function QueryEditor(): JSX.Element {
         )}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 border-b border-app-border bg-app-panel shrink-0">
+        <div className="flex items-center gap-1 text-2xs text-text-muted">
+          <BrainCircuit size={11} />
+          <span>语句感知</span>
+        </div>
+        {referencedTables.length > 0 ? (
+          referencedTables.map((table) => (
+            <span key={table} className="rounded bg-app-hover px-2 py-0.5 text-2xs text-text-secondary">
+              表 {table}
+            </span>
+          ))
+        ) : (
+          <span className="text-2xs text-text-muted">当前语句未识别到明确表名</span>
+        )}
+        {aliasEntries.slice(0, 4).map(([alias, table]) => (
+          <span key={alias} className="rounded border border-app-border px-2 py-0.5 text-2xs text-text-muted">
+            {alias} {'->'} {table}
+          </span>
+        ))}
+        <span className="text-2xs text-text-muted">
+          语义索引命中 {semanticMatches.length}/{referencedTables.length || 0}
+        </span>
+        {referencedTables.length > 0 && semanticMatches.length < referencedTables.length && (
+          <button
+            onClick={() => setWindowTab('ai-workbench')}
+            className="rounded border border-app-border px-2 py-0.5 text-2xs text-text-secondary hover:border-accent-blue hover:text-text-primary"
+            title="前往 AI 工作台查看或重建语义索引"
+          >
+            去补索引
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 border-b border-app-border bg-app-bg shrink-0">
+        {semanticMatches.length > 0 ? (
+          semanticMatches.slice(0, 4).map((item) => (
+            <button
+              key={`${item.databaseName}.${item.tableName}`}
+              onClick={() => setWindowTab('ai-workbench')}
+              className="rounded border border-accent-blue/40 bg-blue-500/10 px-2 py-0.5 text-2xs text-text-secondary hover:border-accent-blue hover:text-text-primary"
+              title={item.manualNotes ? `人工备注: ${item.manualNotes}` : '前往 AI 工作台查看索引详情'}
+            >
+              命中 {item.databaseName}.{item.tableName}{item.manualNotes ? ' · 含备注' : ''}
+            </button>
+          ))
+        ) : (
+          <span className="text-2xs text-text-muted">未命中语义索引时，AI 将主要依赖 SQL 结构、执行计划和 schema。</span>
+        )}
+      </div>
+
       {/* Monaco Editor */}
       <div className="flex-1 selectable">
         <MonacoEditor
@@ -565,6 +666,20 @@ function resolveTypedQualifier(textUntilCursor: string): string | null {
 function getCurrentSqlStatement(textUntilCursor: string): string {
   const parts = textUntilCursor.split(';')
   return parts[parts.length - 1] ?? textUntilCursor
+}
+
+function extractReferencedTables(sql: string): string[] {
+  const matches = new Set<string>()
+  const pattern = /\b(?:from|join|update|into|table)\s+((?:\[[^\]]+\]|`[^`]+`|"[^"]+"|[a-zA-Z0-9_]+)(?:\s*\.\s*(?:\[[^\]]+\]|`[^`]+`|"[^"]+"|[a-zA-Z0-9_]+))?)/gi
+
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(sql)) !== null) {
+    const normalized = normalizeSqlIdentifier(match[1]).replace(/\s*\.\s*/g, '.')
+    const tableName = normalized.split('.').pop() ?? normalized
+    if (tableName) matches.add(tableName)
+  }
+
+  return Array.from(matches)
 }
 
 function parseTableAliases(sql: string): Record<string, string> {
