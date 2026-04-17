@@ -30,6 +30,7 @@ export interface SchemaColumn {
   nullable: boolean
   primaryKey: boolean
   defaultValue?: string
+  collation?: string
   comment?: string
 }
 

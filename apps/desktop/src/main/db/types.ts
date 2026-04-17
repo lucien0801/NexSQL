@@ -24,6 +24,7 @@ export interface DriverColumnInfo {
   nullable: boolean
   primaryKey: boolean
   defaultValue?: string
+  collation?: string
 }
 
 export interface DriverIndexInfo {

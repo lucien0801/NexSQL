@@ -91,7 +91,7 @@ export class MySQLDriver implements IDbDriver {
   async getColumns(table: string, database?: string): Promise<DriverColumnInfo[]> {
     const db = database ?? this.currentDatabase
     const [rows] = await this.pool.query(
-      `SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT
+      `SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, COLLATION_NAME
        FROM information_schema.COLUMNS
        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
        ORDER BY ORDINAL_POSITION`,
@@ -102,7 +102,8 @@ export class MySQLDriver implements IDbDriver {
       type: r['DATA_TYPE'] as string,
       nullable: r['IS_NULLABLE'] === 'YES',
       primaryKey: r['COLUMN_KEY'] === 'PRI',
-      defaultValue: r['COLUMN_DEFAULT'] != null ? String(r['COLUMN_DEFAULT']) : undefined
+      defaultValue: r['COLUMN_DEFAULT'] != null ? String(r['COLUMN_DEFAULT']) : undefined,
+      collation: r['COLLATION_NAME'] != null ? String(r['COLLATION_NAME']) : undefined
     }))
   }
 
